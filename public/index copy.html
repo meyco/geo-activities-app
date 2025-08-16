@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TripAdvisor API Test</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="Style.css">     <!--link original style css-->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> <!--link font awesome-->
+
+</head>
+<body>
+    <div  class="containerAll">
+        <!-- userform for weather entry -->
+    <form>
+        <input class="input" type="text" value="Berlin" id="inputCity" title="Choose your City" 
+        placeholder="inputCity" />
+        <input class="input" type="text" value="Germany" id="inputCountry" title="Choose your Country" />
+        <!-- <input type="text" value="5" id="inputDayNum" /> -->
+        <button  class="button-56" role="button" type="button" onclick="main()">Show</button>
+    </form>
+    
+        <!-- main container of this website -->
+        <main>
+            <section id="currentWeather" title="Current Weather">
+                <h2 id="cityName"><i class="fa-solid fa-city"></i> City Name</h2>
+                <p><span>Now Weather<i class="fa-solid fa-cloud-sun"></i>:  </span><p id="todayWeather"></p><span id="todayWeatherIcon"></span></p>
+                <p><span>Now Temperature:  <i class="fa-solid fa-thermometer-half"></i></span><span id="todayTemperature"></span></dipv>
+                    <section title="Recommended Activities">
+                        <p><h3>Recommended Activities:  <i class="fa-solid fa-biking"></i>:</h3>
+                            <strong><h2 id="todayActivities"></h2></strong><span id="imgActivities"></span></p>
+                        <p id="todayActivitiesText"></p>            
+                    </section>
+
+                </section>
+            <section title="Show Nearby Search Attractions">
+                <p><h3>Nearby Attractions  <i class="fa-solid fa-biking"></i>:</h3>
+                <div id="result"></div>
+    
+            </section>
+        </main>
+        <section id="forecasts" title="Forecast">
+             <section>
+                <h3>Today Rain Forcast (24h)</h3>
+                <div id="TodayTemperature"></div>
+            </section>
+            <section>
+                <h3>5 Days Weather Forcast<h3>
+                <div id="fiveDaysTemperature"></div>
+            </section>
+        </section>
+
+    <script>
+        async function main() {
+            let inputCity = document.getElementById( "inputCity" ) ;// get input text
+            let getInputCity = inputCity.value ;  //get user value
+
+            let inputCountry = document.getElementById( "inputCountry" ) ;// get input text
+            let getInputCountry = inputCountry.value ;  //get user value
+
+            let showCityName = document.getElementById( "cityName" ) ;
+            showCityName.textContent = getInputCity;
+
+            let geocodeUrl = `https://api.opencagedata.com/geocode/v1/json?q=${getInputCity},+${getInputCountry}&key=1aa265a4201143619e02b78c27c081e9`;
+            let geocodeResponse = await fetch(geocodeUrl); //fetch the url
+            let geocodeData = await geocodeResponse.json();
+
+            let latitude = geocodeData.results[0].geometry.lat;//ido
+            let longitude = geocodeData.results[0].geometry.lng;//kedo
+
+            let cityName = geocodeData.results[0].formatted;
+            console.log("cityname", cityName);
+            console.log("latitude",latitude, "longitude",longitude);
+
+            // Trip Advser api  (writtern by Chat GPT)
+            //const response = await fetch('http://localhost:3000/api/search');
+            const response = await fetch(`/api/search?lat=${latitude}&lon=${longitude}`);
+            const TripAdvserData = await response.json();
+            //document.getElementById('result').tesxtContent = JSON.stringify(TripAdvserData, null, 2);
+            console.log("Show Nearby Search",TripAdvserData);// Check get API data
+
+            //get each data from trip advise api
+            let Triplist = TripAdvserData.data;
+            let placeNameList = [];//make Array.
+            let addressList = [];//make Array
+            for (let i = 0; i < Triplist.length; i++) {
+                    let placeName = Triplist[i].name//get tempertures Array.They alerady Arra
+                    let address = Triplist[i].address_obj.address_string;//get time Array
+
+                    placeNameList.push(placeName); // push is add to number to temperaturesList Array.
+                    addressList.push(address); // add to number to Array.
+                }            
+            console.log("placeNameList",placeNameList);// Check get API data
+            console.log("addressList",addressList);// Check get API data 
+            //end Trip Advser apis
+
+            //show TripAdviser to html
+            let showTripAdviserPlace = document.getElementById('result');
+            showTripAdviserPlace.innerHTML = ''; // Clear previous results
+            for (let i = 0; i < placeNameList.length; i++) {
+                let placeName = placeNameList[i];
+                let address = addressList[i];
+                let placeElement = document.createElement('p');
+                placeElement.innerHTML = `<strong>${placeName}</strong>: ${address}`;
+
+                showTripAdviserPlace.appendChild(placeElement);
+            }
+
+        
+
+            //weather forcast
+            let url =`https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=30f7177c6e3a037397bf9ae66abb0af4&units=metric`;
+            let weatherResponse = await fetch(url); //fetch the url
+            let data = await weatherResponse.json();
+            console.log("openWeatherMap",data);// Check get API data
+            
+
+
+            let list = data.list;
+            let temperaturesList = [];//make Array.
+            let timesList = [];//make Array
+            let humidList = [];//make Array
+            let weatherNameList = [];//get tempertures Array   
+            let rainList = [];
+            let todayTemperaturesList = [];
+            let todayRainList = [];
+            let todayTimeList = [];
+            let weatherIconList = [];
+            //let uvList = [];   
+            //console.log("dataLists",list);// Check get API data
+
+                for (let i = 0; i < list.length; i++) {
+                    let temperature = list[i].main.temp;//get tempertures Array.They alerady Arra
+                    let time = list[i].dt_txt;//get time Array
+                    let humid = list[i].main.humidity;//get humid Array
+                    let weatherName = list[i].weather[0].description;//get weather Name Array
+                    let rain = list[i].pop * 100;//get weather Name Array
+                    //let uv = list[i].weather[0].description;//get uv Array
+                    let weatherIcon = list[i].weather[0].icon;//get weather Name Array
+
+
+                    temperaturesList.push(temperature); // push is add to number to temperaturesList Array.
+                    timesList.push(time); // add to number to Array.
+                    humidList.push(humid); // add to number to  Array.
+                    weatherNameList.push(weatherName); // add to number to  Array.
+                    rainList.push(rain); // add to number to  Array.
+                    weatherIconList.push(weatherIcon); // add to number to  Array.
+                    //uvListt.push(uv); // add to number to  Array.
+                }
+                
+                for(let i = 0; i< 8; i++){
+                    let temperature = list[i].main.temp;//get tempertures Array.They alerady Arra
+                    let rain = list[i].pop * 100;//get weather Name Array
+                    let time = list[i].dt_txt;//get time Array
+
+                    todayTemperaturesList.push(temperature); // push is add to number to temperaturesList Array.
+                    todayRainList.push(rain); // add to number to  Array.
+                    todayTimeList.push(time); // add to number to  Array.
+                }
+
+
+
+            // console.log("temperatures",temperaturesList);// Check get API data
+            // console.log("time",timesList);// Check get API data
+            // console.log("humidList",humidList);// Check get API data
+            // console.log("weatherName",weatherNameList);// Check get API data
+            // console.log("rainList",rainList);// Check get API data
+            // console.log("TodayRainList",todayRainList);// Check get API data
+            // console.log("weatherIconList",weatherIconList);// Check get API data
+            //console.log("uvList",uvList);// Check get API data
+
+
+
+
+            let showTodayWeather = document.getElementById('todayWeather');
+            showTodayWeather.textContent = weatherNameList[0];
+
+            //Show Today Weather Icon in Div
+            let showTodayWeatherIcon = document.getElementById('todayWeatherIcon');
+            showTodayWeatherIcon.innerHTML = '';
+            let imgWeatherIcon = document.createElement('img');      
+            imgWeatherIcon.src = `http://openweathermap.org/img/wn/${weatherIconList[0]}@2x.png`;
+            showTodayWeatherIcon.appendChild(imgWeatherIcon);
+            
+
+
+
+            let showTodayTemperture = document.getElementById('todayTemperature');
+            showTodayTemperture.textContent = temperaturesList[0] +'°C';
+
+            let showActivities = document.getElementById('todayActivities');
+            let showActivitiesimg = document.getElementById('imgActivities');
+            
+            // Delete current image
+            showActivitiesimg.innerHTML = '';
+            
+            let img = document.createElement('img');      
+            img.width = 100; 
+            img.height = 100; 
+
+
+            //Using in Activiity condtion
+            let todayWeather = weatherNameList[0];
+            let todayTemperture = temperaturesList[0];
+            let todayWeatherIcon= weatherIconList[0];
+            
+
+            
+            if (todayTemperture > 35) {//sunny
+                    showActivities.textContent = 'Visit to a Lake in and around Berlin';
+                    todayActivitiesText.textContent = 'Cool off with a visit to one of the many lakes.';
+                    img.src = './img/Activities/lake.png';
+                    showActivitiesimg.appendChild(img);
+                    console.log("Above 35");
+
+                } else if (todayTemperture > 30) {
+                    showActivities.textContent = 'Laying at the Beach of Lake Wannsee';
+                    todayActivitiesText.textContent = 'Relax and sunbathe at Lake Wannsee\'s beach.';
+                    img.src = './img/Activities/vacations.png';
+                    showActivitiesimg.appendChild(img);
+                    console.log("30-35°C");
+
+                } else if (todayTemperture > 25) {
+                    showActivities.textContent = 'Biking on Tempelhofer Feld';
+                    todayActivitiesText.textContent = 'Take a bike ride on the expansive Tempelhofer Feld.';
+                    img.src = './img/Activities/bicycle.png';
+                    showActivitiesimg.appendChild(img);
+                    console.log("20-30°C");
+
+                } else if (todayTemperture > 20) {
+                    showActivities.textContent = 'Walk along the Landwehrkanal';
+                    todayActivitiesText.textContent = 'Enjoy a pleasant walk by the canal as the weather gets milder.';
+                    img.src = './img/Activities/walking.png';
+                    showActivitiesimg.appendChild(img);
+                    console.log("10-20°C");
+
+                } else if (todayTemperture > 15) {
+                    showActivities.textContent = 'Indoor Swimming';
+                    todayActivitiesText.textContent = 'Stay active and warm by swimming indoors.';
+                    img.src = './img/Activities/swimming.png';
+                    showActivitiesimg.appendChild(img);
+                    console.log("0-10°C");
+
+                } else {
+                    showActivities.textContent = 'Visiting a Sauna';
+                    todayActivitiesText.textContent = 'Warm up and relax in a cozy sauna.';
+                    img.src = './img/Activities/sauna.png';
+                    showActivitiesimg.appendChild(img);
+                    console.log("Below 0°C");
+                }
+
+
+
+            let dataSet1 = {
+            x: timesList,
+            y: temperaturesList,
+            type: 'scatter',
+            name: 'Temperature',
+            marker: {
+                    color: '#38c29d',  // color
+                    }
+            };
+
+            let dataSet2 = {
+            x: timesList,
+            y: humidList,
+            type: 'bar',
+            name: 'Humid Bar',
+            marker: {
+                    color: '#d3e8f8',  // color
+                    }
+            };
+
+
+            let dataSet3 = {
+            x: timesList,
+            y: rainList,
+            type: 'bar',
+            name: 'Rain Bar',
+            marker: {
+                    color: '#357ebf',  // color
+                    }
+            };
+
+            let dataSet4 = {
+            x: todayTimeList,
+            y: todayTemperaturesList,
+            type: 'scatter',
+            name: 'Temperature',
+            marker: {
+                    color: '#38c29d',  // color
+                    }
+            };
+
+            let dataSet5 = {
+            x: todayTimeList,
+            y: todayRainList,
+            type: 'bar',
+            name: 'Rain Bar(%)',
+            marker: {
+                    color: '#357ebf',  // color
+                    }
+            };
+
+
+            Plotly.newPlot('fiveDaysTemperature', [dataSet1, dataSet2, dataSet3]);
+            Plotly.newPlot('TodayTemperature', [dataSet4, dataSet5]);
+
+        }
+
+    </script>
+    <a href="https://www.flaticon.com/free-icons/vacation" title="icons">Icons created by Freepik - Flaticon</a>
+</div>
+</body>
+</html>
