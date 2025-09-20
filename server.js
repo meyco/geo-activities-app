@@ -6,7 +6,34 @@ const app = express();
 const port = 3000;
 
 app.use(express.static('public'));
+//Eventbrite api
+app.get('/api/events', async (req, res) => {
+  const EVENT_BRITE_API_KEY = process.env.EVENT_BRITE_API_KEY; // .envに保存しておく
+  const { lat, lon, within = "10km" } = req.query;
 
+console.log("API KEY:", process.env.EVENT_BRITE_API_KEY);
+
+
+  const url = new URL("https://www.eventbriteapi.com/v3/events/search/");
+  url.searchParams.set("location.latitude", lat);
+  url.searchParams.set("location.longitude", lon);
+  url.searchParams.set("location.within", within);
+  url.searchParams.set("sort_by", "date");
+
+  try {
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${EVENT_BRITE_API_KEY}` }
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
+
+//google maps api
 app.get('/api/search', async (req, res) => {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     let latitude = req.query.lat;//get latitude from hstml
