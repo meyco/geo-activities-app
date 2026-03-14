@@ -72,6 +72,10 @@
                             <h3 class="text-xl">Nearby Attractions <i class="fa-solid fa-biking"></i>:</h3>
                             <div id="result" class="flex flex-wrap"></div>
                         </div>
+                        <div title="Local Events" class="flex flex-col bg-pink-100 p-4 w-full">
+                            <h3 class="text-xl">Nearby Events <i class="fa-solid fa-calendar-days"></i>:</h3>
+                            <div id="events" class="flex flex-wrap"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -103,20 +107,26 @@
             let showCityName = document.getElementById("cityName");
             showCityName.textContent = getInputCity;
 
-            let geocodeUrl = `https://api.opencagedata.com/geocode/v1/json?q=${getInputCity},+${getInputCountry}&key=d0a15ec6141f4224b9e0ff7f67efab52`;
-            let geocodeResponse = await fetch(geocodeUrl); //fetch the url
+            let geocodeResponse = await fetch(`/api/geocode?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
             let geocodeData = await geocodeResponse.json();
 
-            let latitude = geocodeData.results[0].geometry.lat;//ido
-            let longitude = geocodeData.results[0].geometry.lng;//kedo
+            if (!geocodeResponse.ok) {
+                console.error("OpenCage error", geocodeData);
+                alert(`Location lookup failed: ${geocodeData.details || geocodeData.error || "Unknown error"}`);
+                return;
+            }
 
-            let cityName = geocodeData.results[0].formatted;
+            let latitude = geocodeData.geometry.lat;//ido
+            let longitude = geocodeData.geometry.lng;//kedo
+
+            let cityName = geocodeData.formatted;
             console.log("cityname", cityName);
             console.log("latitude", latitude, "longitude", longitude);
 
             //Event Brite api
             const eventRes = await fetch(`/api/events?lat=${latitude}&lon=${longitude}&within=10km`);
             const eventData = await eventRes.json();
+            const events = Array.isArray(eventData.events) ? eventData.events : [];
 
             console.log("Eventbrite events:", (eventData.events || []).map(e => ({
                 id: e.id,
@@ -124,6 +134,41 @@
                 start: e.start?.local,
                 venue: e.venue?.address?.localized_address_display
             })));
+
+            let eventsContainer = document.getElementById('events');
+            eventsContainer.innerHTML = '';
+
+            if (!eventRes.ok) {
+                let errorElement = document.createElement('p');
+                errorElement.className = 'text-base';
+                errorElement.textContent = eventData.error || 'Failed to load events.';
+                eventsContainer.appendChild(errorElement);
+            } else if (events.length === 0) {
+                let emptyElement = document.createElement('p');
+                emptyElement.className = 'text-base';
+                emptyElement.textContent = 'No nearby events found.';
+                eventsContainer.appendChild(emptyElement);
+            } else {
+                for (let i = 0; i < Math.min(events.length, 6); i++) {
+                    let event = events[i];
+                    let eventName = event.name?.text || 'Untitled event';
+                    let eventDate = event.start?.local
+                        ? new Date(event.start.local).toLocaleString('en-GB', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })
+                        : 'Date unavailable';
+                    let eventVenue = event.venue?.address?.localized_address_display || 'Venue unavailable';
+                    let eventUrl = event.url || '#';
+                    let eventElement = document.createElement('div');
+                    eventElement.className = 'flex flex-col bg-white p-2 m-1 shadow-xl ring-1 ring-gray-900/5 text-black sm:rounded-lg';
+                    eventElement.innerHTML = `<h4 class="text-xl">${eventName}</h4><p class="text-base">${eventDate}</p><p class="text-base">${eventVenue}</p><a class="text-blue-600 underline" href="${eventUrl}" target="_blank" rel="noopener noreferrer">View event</a>`;
+                    eventsContainer.appendChild(eventElement);
+                }
+            }
 
 
 
