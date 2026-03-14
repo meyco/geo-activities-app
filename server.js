@@ -59,9 +59,6 @@ app.get('/api/events', async (req, res) => {
   const EVENT_BRITE_API_KEY = process.env.EVENT_BRITE_API_KEY; // .envに保存しておく
   const { lat, lon, within = "10km" } = req.query;
 
-console.log("API KEY:", process.env.EVENT_BRITE_API_KEY);
-
-
   const url = new URL("https://www.eventbriteapi.com/v3/events/search/");
   url.searchParams.set("location.latitude", lat);
   url.searchParams.set("location.longitude", lon);
@@ -88,14 +85,48 @@ console.log("API KEY:", process.env.EVENT_BRITE_API_KEY);
   }
 });
 
+app.get('/api/weather', async (req, res) => {
+  const apiKey = process.env.OPENWEATHER_API_KEY;
+  const lat = req.query.lat?.toString();
+  const lon = req.query.lon?.toString();
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Missing OpenWeather API key' });
+  }
+
+  if (!lat || !lon) {
+    return res.status(400).json({ error: 'Latitude and longitude are required' });
+  }
+
+  const url = new URL('https://api.openweathermap.org/data/2.5/forecast');
+  url.searchParams.set('lat', lat);
+  url.searchParams.set('lon', lon);
+  url.searchParams.set('appid', apiKey);
+  url.searchParams.set('units', 'metric');
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: data.message || 'Failed to fetch weather'
+      });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('OpenWeather error:', error);
+    res.status(500).json({ error: 'Failed to fetch weather' });
+  }
+});
+
 
 //google maps api
 app.get('/api/search', async (req, res) => {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     let latitude = Number(req.query.lat);//get latitude from hstml
     let longitude = Number(req.query.lon);//get latitude from html
-    
-    console.log("API KEY:", process.env.GOOGLE_MAPS_API_KEY);
     
     try {
         const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {

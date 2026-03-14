@@ -216,9 +216,15 @@
 
 
             //weather forcast
-            let url = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=30f7177c6e3a037397bf9ae66abb0af4&units=metric`;
-            let weatherResponse = await fetch(url); //fetch the url
+            let weatherResponse = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`);
             let data = await weatherResponse.json();
+
+            if (!weatherResponse.ok) {
+                console.error("OpenWeather error", data);
+                alert(`Weather lookup failed: ${data.error || "Unknown error"}`);
+                return;
+            }
+
             console.log("openWeatherMap", data);// Check get API data
 
 
