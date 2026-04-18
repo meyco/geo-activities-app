@@ -7,6 +7,8 @@ import { load } from 'cheerio';
 const app = express();
 const port = 3000;
 const SCRAPER_USER_AGENT = 'geo-activities-app/1.0 (+local dev)';
+const berlinEventDetailsCache = new Map();
+const addressCoordinatesCache = new Map();
 
 const BERLIN_DE_SOURCES = [
   {
@@ -44,6 +46,96 @@ async function fetchHtml(url) {
   }
 
   return response.text();
+}
+
+async function geocodeAddress(query) {
+  const apiKey = process.env.OPENCAGE_API_KEY;
+
+  if (!apiKey || !query) {
+    return null;
+  }
+
+  if (addressCoordinatesCache.has(query)) {
+    return addressCoordinatesCache.get(query);
+  }
+
+  const url = new URL('https://api.opencagedata.com/geocode/v1/json');
+  url.searchParams.set('q', query);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('limit', '1');
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    const coordinates = data.results?.[0]?.geometry
+      ? {
+          lat: Number(data.results[0].geometry.lat),
+          lng: Number(data.results[0].geometry.lng)
+        }
+      : null;
+
+    addressCoordinatesCache.set(query, coordinates);
+    return coordinates;
+  } catch (error) {
+    console.error('Address geocoding error:', error);
+    return null;
+  }
+}
+
+async function fetchBerlinDeEventDetails(url) {
+  if (berlinEventDetailsCache.has(url)) {
+    return berlinEventDetailsCache.get(url);
+  }
+
+  const detailsPromise = (async () => {
+    const html = await fetchHtml(url);
+    const $ = load(html);
+    const rawJsonLd = $('script[type="application/ld+json"]').first().html();
+    let location = null;
+
+    if (rawJsonLd) {
+      try {
+        const data = JSON.parse(rawJsonLd);
+        location = data.location || null;
+      } catch (error) {
+        console.error('Berlin.de JSON-LD parse error:', error);
+      }
+    }
+
+    const mapTitle = normalizeText(
+      $('h3.title').filter((_, el) => $(el).text().toLowerCase().includes('on the map')).first().text()
+    ).replace(/\s+on the map$/i, '');
+    const streetAddress = normalizeText($('.street-address').first().text());
+    const locationBlock = normalizeText($('.location-publictransport').first().text());
+    const addressText = streetAddress || (
+      locationBlock.match(/Address\s+(.+?)\s+City map/i)?.[1]?.trim() || ''
+    );
+
+    let coordinates = null;
+    if (location?.geo?.latitude && location?.geo?.longitude) {
+      coordinates = {
+        lat: Number(location.geo.latitude),
+        lng: Number(location.geo.longitude)
+      };
+    } else if (addressText) {
+      coordinates = await geocodeAddress(`${addressText}, Berlin, Germany`);
+    }
+
+    return {
+      venue: normalizeText(location?.name || mapTitle || 'Berlin'),
+      address: normalizeText(
+        [
+          location?.address?.streetAddress,
+          location?.address?.postalCode,
+          location?.address?.addressLocality
+        ].filter(Boolean).join(', ') || addressText
+      ),
+      coordinates
+    };
+  })();
+
+  berlinEventDetailsCache.set(url, detailsPromise);
+  return detailsPromise;
 }
 
 async function fetchBerlinDeEvents() {
@@ -96,7 +188,28 @@ async function fetchBerlinDeEvents() {
     results.push(...items);
   }
 
-  return results;
+  const enriched = await Promise.all(
+    results.map(async (event) => {
+      try {
+        const details = await fetchBerlinDeEventDetails(event.url);
+        return {
+          ...event,
+          venue: details.venue || event.venue,
+          address: details.address || '',
+          coordinates: details.coordinates || null
+        };
+      } catch (error) {
+        console.error('Berlin.de detail fetch error:', error);
+        return {
+          ...event,
+          address: '',
+          coordinates: null
+        };
+      }
+    })
+  );
+
+  return enriched;
 }
 
 async function fetchLumaEvents(city) {
