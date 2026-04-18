@@ -401,7 +401,7 @@ app.get('/api/search', async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress'
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location'
       },
       body: JSON.stringify({
         includedTypes: ['tourist_attraction'],
@@ -431,7 +431,13 @@ app.get('/api/search', async (req, res) => {
     const placesApiData = await response.json();
     const results = (placesApiData.places || []).map((place) => ({
       name: place.displayName?.text || 'Unknown place',
-      vicinity: place.shortFormattedAddress || place.formattedAddress || ''
+      vicinity: place.shortFormattedAddress || place.formattedAddress || '',
+      coordinates: place.location?.latitude && place.location?.longitude
+        ? {
+            lat: Number(place.location.latitude),
+            lng: Number(place.location.longitude)
+          }
+        : null
     }));
 
     res.json({ results });
