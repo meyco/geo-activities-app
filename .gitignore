@@ -1,3 +1,5 @@
 # 秘密情報
 .env
 node_modules
+server.err.log
+server.out.log
