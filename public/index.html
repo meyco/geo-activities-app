@@ -76,6 +76,11 @@
                             <h3 class="text-xl">Nearby Events <i class="fa-solid fa-calendar-days"></i>:</h3>
                             <div id="events" class="flex flex-wrap"></div>
                         </div>
+                        <div title="Event Map" class="flex flex-col bg-pink-100 p-4 w-full">
+                            <h3 class="text-xl">Event Map <i class="fa-solid fa-map-location-dot"></i>:</h3>
+                            <div id="mapStatus" class="text-base mb-2"></div>
+                            <div id="eventMap" class="w-full rounded-lg ring-1 ring-gray-900/5 bg-white" style="min-height: 320px;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -97,6 +102,101 @@
     </section>
 
     <script>
+        let googleMapsPromise;
+
+        async function getMapsConfig() {
+            const response = await fetch('/api/maps-config');
+            return response.json();
+        }
+
+        async function loadGoogleMaps(apiKey) {
+            if (window.google?.maps) {
+                return window.google.maps;
+            }
+
+            if (!googleMapsPromise) {
+                googleMapsPromise = new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
+                    script.async = true;
+                    script.defer = true;
+                    script.onload = () => resolve(window.google.maps);
+                    script.onerror = () => reject(new Error('Failed to load Google Maps'));
+                    document.head.appendChild(script);
+                });
+            }
+
+            return googleMapsPromise;
+        }
+
+        async function renderEventMap(events, cityCoordinates) {
+            const mapStatus = document.getElementById('mapStatus');
+            const mapElement = document.getElementById('eventMap');
+            mapStatus.textContent = '';
+            mapElement.innerHTML = '';
+
+            const mappableEvents = events.filter(event => event.coordinates?.lat && event.coordinates?.lng);
+
+            if (mappableEvents.length === 0) {
+                mapStatus.textContent = 'Map pins are currently available for Luma events with coordinates.';
+                return;
+            }
+
+            const mapsConfig = await getMapsConfig();
+
+            if (!mapsConfig.browserApiKey) {
+                mapStatus.textContent = 'Add GOOGLE_MAPS_BROWSER_API_KEY to show the event map.';
+                return;
+            }
+
+            try {
+                const maps = await loadGoogleMaps(mapsConfig.browserApiKey);
+                const center = mappableEvents[0].coordinates || cityCoordinates || mapsConfig.defaultCenter;
+                const map = new maps.Map(mapElement, {
+                    center,
+                    zoom: 11,
+                    mapTypeControl: false,
+                    streetViewControl: false
+                });
+                const bounds = new maps.LatLngBounds();
+                const infoWindow = new maps.InfoWindow();
+
+                mappableEvents.forEach((event) => {
+                    const marker = new maps.Marker({
+                        position: event.coordinates,
+                        map,
+                        title: event.name
+                    });
+
+                    bounds.extend(event.coordinates);
+
+                    marker.addListener('click', () => {
+                        infoWindow.setContent(`
+                            <div style="max-width: 240px;">
+                                <strong>${event.name}</strong><br>
+                                <span>${event.dateText || ''}</span><br>
+                                <span>${event.venue || ''}</span><br>
+                                <a href="${event.url}" target="_blank" rel="noopener noreferrer">View event</a>
+                            </div>
+                        `);
+                        infoWindow.open(map, marker);
+                    });
+                });
+
+                if (mappableEvents.length === 1) {
+                    map.setCenter(center);
+                    map.setZoom(13);
+                } else {
+                    map.fitBounds(bounds, 40);
+                }
+
+                mapStatus.textContent = `${mappableEvents.length} event location${mappableEvents.length > 1 ? 's' : ''} shown on the map.`;
+            } catch (error) {
+                console.error('Google Maps error', error);
+                mapStatus.textContent = 'Failed to load Google Maps.';
+            }
+        }
+
         async function main() {
             let inputCity = document.getElementById("inputCity");// get input text
             let getInputCity = inputCity.value;  //get user value
@@ -123,17 +223,9 @@
             console.log("cityname", cityName);
             console.log("latitude", latitude, "longitude", longitude);
 
-            //Event Brite api
-            const eventRes = await fetch(`/api/events?lat=${latitude}&lon=${longitude}&within=10km`);
+            const eventRes = await fetch(`/api/events?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
             const eventData = await eventRes.json();
-            const events = Array.isArray(eventData.events) ? eventData.events : [];
-
-            console.log("Eventbrite events:", (eventData.events || []).map(e => ({
-                id: e.id,
-                name: e.name?.text,
-                start: e.start?.local,
-                venue: e.venue?.address?.localized_address_display
-            })));
+            const events = Array.isArray(eventData.results) ? eventData.results : [];
 
             let eventsContainer = document.getElementById('events');
             eventsContainer.innerHTML = '';
@@ -143,6 +235,11 @@
                 errorElement.className = 'text-base';
                 errorElement.textContent = eventData.error || 'Failed to load events.';
                 eventsContainer.appendChild(errorElement);
+            } else if (eventData.warning) {
+                let warningElement = document.createElement('p');
+                warningElement.className = 'text-base';
+                warningElement.textContent = eventData.warning;
+                eventsContainer.appendChild(warningElement);
             } else if (events.length === 0) {
                 let emptyElement = document.createElement('p');
                 emptyElement.className = 'text-base';
@@ -151,24 +248,19 @@
             } else {
                 for (let i = 0; i < Math.min(events.length, 6); i++) {
                     let event = events[i];
-                    let eventName = event.name?.text || 'Untitled event';
-                    let eventDate = event.start?.local
-                        ? new Date(event.start.local).toLocaleString('en-GB', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        })
-                        : 'Date unavailable';
-                    let eventVenue = event.venue?.address?.localized_address_display || 'Venue unavailable';
+                    let eventName = event.name || 'Untitled event';
+                    let eventDate = event.dateText || 'Date unavailable';
+                    let eventVenue = event.venue || 'Venue unavailable';
+                    let eventSource = event.source || 'Event source';
                     let eventUrl = event.url || '#';
                     let eventElement = document.createElement('div');
                     eventElement.className = 'flex flex-col bg-white p-2 m-1 shadow-xl ring-1 ring-gray-900/5 text-black sm:rounded-lg';
-                    eventElement.innerHTML = `<h4 class="text-xl">${eventName}</h4><p class="text-base">${eventDate}</p><p class="text-base">${eventVenue}</p><a class="text-blue-600 underline" href="${eventUrl}" target="_blank" rel="noopener noreferrer">View event</a>`;
+                    eventElement.innerHTML = `<h4 class="text-xl">${eventName}</h4><p class="text-sm font-semibold uppercase tracking-wide text-gray-500">${eventSource}</p><p class="text-base">${eventDate}</p><p class="text-base">${eventVenue}</p><a class="text-blue-600 underline" href="${eventUrl}" target="_blank" rel="noopener noreferrer">View event</a>`;
                     eventsContainer.appendChild(eventElement);
                 }
             }
+
+            await renderEventMap(events, { lat: latitude, lng: longitude });
 
 
 

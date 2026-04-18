@@ -2,10 +2,162 @@ import dotenv from 'dotenv';
 dotenv.config();
 import express from 'express';
 import fetch from 'node-fetch';
+import { load } from 'cheerio';
+
 const app = express();
 const port = 3000;
+const SCRAPER_USER_AGENT = 'geo-activities-app/1.0 (+local dev)';
+
+const BERLIN_DE_SOURCES = [
+  {
+    url: 'https://www.berlin.de/en/tickets/today/',
+    fallbackDate: 'Today'
+  },
+  {
+    url: 'https://www.berlin.de/en/tickets/tomorrow/',
+    fallbackDate: 'Tomorrow'
+  }
+];
 
 app.use(express.static('public'));
+
+function normalizeText(value) {
+  return value?.replace(/\s+/g, ' ').trim() || '';
+}
+
+function parseLumaEventUrls() {
+  return (process.env.LUMA_EVENT_URLS || '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+async function fetchHtml(url) {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': SCRAPER_USER_AGENT
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}: ${response.status}`);
+  }
+
+  return response.text();
+}
+
+async function fetchBerlinDeEvents() {
+  const results = [];
+
+  for (const source of BERLIN_DE_SOURCES) {
+    const html = await fetchHtml(source.url);
+    const $ = load(html);
+    const items = [];
+
+    $('h3 a').each((_, element) => {
+      if (items.length >= 6) {
+        return false;
+      }
+
+      const href = $(element).attr('href');
+      const name = normalizeText($(element).text());
+
+      if (!href || !name) {
+        return;
+      }
+
+      const absoluteUrl = new URL(href, source.url).toString();
+
+      if (
+        absoluteUrl.includes('/today/') ||
+        absoluteUrl.includes('/tomorrow/') ||
+        absoluteUrl.includes('/weekend/') ||
+        absoluteUrl.includes('/events/') && !absoluteUrl.includes('/tickets/') && !absoluteUrl.includes('/shopping/')
+      ) {
+        return;
+      }
+
+      const card = $(element).closest('h3').parent();
+      const dateText = normalizeText(card.find('.teaser__meta').first().text()) || source.fallbackDate;
+      const description = normalizeText(
+        card.find('.inner .text, p.text').first().text().replace(/\s*more\s*$/i, '')
+      );
+
+      items.push({
+        name,
+        dateText,
+        venue: 'Berlin',
+        source: 'Berlin.de',
+        url: absoluteUrl,
+        description
+      });
+    });
+
+    results.push(...items);
+  }
+
+  return results;
+}
+
+async function fetchLumaEvents(city) {
+  const lumaUrls = parseLumaEventUrls();
+  const now = Date.now();
+
+  if (lumaUrls.length === 0) {
+    return [];
+  }
+
+  const settled = await Promise.allSettled(
+    lumaUrls.map(async (url) => {
+      const html = await fetchHtml(url);
+      const $ = load(html);
+      const jsonLd = $('script[type="application/ld+json"]').first().html();
+
+      if (!jsonLd) {
+        throw new Error(`Missing structured event data for ${url}`);
+      }
+
+      const eventData = JSON.parse(jsonLd);
+      const locality = normalizeText(eventData.location?.address?.addressLocality);
+
+      if (city && locality && locality.toLowerCase() !== city.toLowerCase()) {
+        return null;
+      }
+
+      if (eventData.startDate && Date.parse(eventData.startDate) < now) {
+        return null;
+      }
+
+      return {
+        name: normalizeText(eventData.name),
+        dateText: eventData.startDate
+          ? new Date(eventData.startDate).toLocaleString('en-GB', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : 'Date unavailable',
+        venue: normalizeText(eventData.location?.name || locality || 'Venue unavailable'),
+        source: 'Luma',
+        url,
+        description: normalizeText(eventData.description),
+        startAt: eventData.startDate || null,
+        coordinates: eventData.location?.geo?.latitude && eventData.location?.geo?.longitude
+          ? {
+              lat: Number(eventData.location.geo.latitude),
+              lng: Number(eventData.location.geo.longitude)
+            }
+          : null
+      };
+    })
+  );
+
+  return settled
+    .filter((item) => item.status === 'fulfilled' && item.value)
+    .map((item) => item.value);
+}
 
 app.get('/api/geocode', async (req, res) => {
   const apiKey = process.env.OPENCAGE_API_KEY;
@@ -54,35 +206,39 @@ app.get('/api/geocode', async (req, res) => {
   }
 });
 
-//Eventbrite api
 app.get('/api/events', async (req, res) => {
-  const EVENT_BRITE_API_KEY = process.env.EVENT_BRITE_API_KEY; // .envに保存しておく
-  const { lat, lon, within = "10km" } = req.query;
-
-  const url = new URL("https://www.eventbriteapi.com/v3/events/search/");
-  url.searchParams.set("location.latitude", lat);
-  url.searchParams.set("location.longitude", lon);
-  url.searchParams.set("location.within", within);
-  url.searchParams.set("sort_by", "date");
+  const city = normalizeText(req.query.city?.toString() || '');
 
   try {
-    const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${EVENT_BRITE_API_KEY}` }
-    });
-    const data = await r.json();
-
-    if (!r.ok) {
-      return res.status(r.status).json({
-        error: data.error || 'Failed to fetch events',
-        details: data.error_description || 'Unknown Eventbrite error'
+    if (city && city.toLowerCase() !== 'berlin') {
+      return res.json({
+        results: [],
+        warning: 'Event scraping is currently configured for Berlin only.'
       });
     }
 
-    res.json(data);
+    const [berlinDeEvents, lumaEvents] = await Promise.all([
+      fetchBerlinDeEvents(),
+      fetchLumaEvents(city || 'Berlin')
+    ]);
+
+    res.json({
+      results: [...lumaEvents, ...berlinDeEvents]
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to fetch events" });
+    console.error('Event scraping error:', error);
+    res.status(500).json({ error: 'Failed to fetch events' });
   }
+});
+
+app.get('/api/maps-config', (req, res) => {
+  res.json({
+    browserApiKey: process.env.GOOGLE_MAPS_BROWSER_API_KEY || '',
+    defaultCenter: {
+      lat: 52.52,
+      lng: 13.405
+    }
+  });
 });
 
 app.get('/api/weather', async (req, res) => {
@@ -121,59 +277,57 @@ app.get('/api/weather', async (req, res) => {
   }
 });
 
-
-//google maps api
 app.get('/api/search', async (req, res) => {
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-    let latitude = Number(req.query.lat);//get latitude from hstml
-    let longitude = Number(req.query.lon);//get latitude from html
-    
-    try {
-        const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': apiKey,
-                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress'
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const latitude = Number(req.query.lat);
+  const longitude = Number(req.query.lon);
+
+  try {
+    const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress'
+      },
+      body: JSON.stringify({
+        includedTypes: ['tourist_attraction'],
+        maxResultCount: 10,
+        rankPreference: 'POPULARITY',
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude,
+              longitude
             },
-            body: JSON.stringify({
-                includedTypes: ['tourist_attraction'],
-                maxResultCount: 10,
-                rankPreference: 'POPULARITY',
-                locationRestriction: {
-                    circle: {
-                        center: {
-                            latitude,
-                            longitude
-                        },
-                        radius: 1500
-                    }
-                }
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Places API error:', response.status, errorText);
-            return res.status(response.status).json({
-                error: 'Failed to fetch places',
-                details: errorText
-            });
+            radius: 1500
+          }
         }
+      })
+    });
 
-        const placesApiData = await response.json();
-        const results = (placesApiData.places || []).map((place) => ({
-            name: place.displayName?.text || 'Unknown place',
-            vicinity: place.shortFormattedAddress || place.formattedAddress || ''
-        }));
-
-        res.json({ results });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to fetch places' });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Places API error:', response.status, errorText);
+      return res.status(response.status).json({
+        error: 'Failed to fetch places',
+        details: errorText
+      });
     }
+
+    const placesApiData = await response.json();
+    const results = (placesApiData.places || []).map((place) => ({
+      name: place.displayName?.text || 'Unknown place',
+      vicinity: place.shortFormattedAddress || place.formattedAddress || ''
+    }));
+
+    res.json({ results });
+  } catch (error) {
+    console.error('Places API error:', error);
+    res.status(500).json({ error: 'Failed to fetch places' });
+  }
 });
 
 app.listen(port, () => {
-    console.log(`Proxy server running at http://localhost:${port}`);
+  console.log(`Proxy server running at http://localhost:${port}`);
 });
