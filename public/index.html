@@ -81,14 +81,15 @@
         }
 
         .city-name-balance {
-            font-size: clamp(2rem, 3.4vw, 3rem);
+            font-size: clamp(1.8rem, 3vw, 2.7rem);
             line-height: 1.05;
-            overflow-wrap: anywhere;
-            word-break: break-word;
+            overflow-wrap: break-word;
+            word-break: normal;
         }
 
         .loading-panel {
             position: relative;
+            overflow: hidden;
             transition: opacity 0.24s ease, transform 0.24s ease, box-shadow 0.24s ease;
             will-change: opacity, transform;
         }
