@@ -309,11 +309,11 @@
 
             cityNameElement.style.fontSize = `${maxFontSize}px`;
             cityNameElement.style.lineHeight = '1.1';
+            const maxAllowedHeight = maxFontSize * 1.1 * 2 + 2;
 
             while (
                 nextFontSize > minFontSize &&
-                (cityNameElement.scrollHeight > cityNameElement.clientHeight + 1 ||
-                    cityNameElement.scrollWidth > cityNameElement.clientWidth + 1)
+                cityNameElement.scrollHeight > maxAllowedHeight
             ) {
                 nextFontSize -= 1;
                 cityNameElement.style.fontSize = `${nextFontSize}px`;
