@@ -753,7 +753,7 @@
 
 
             let showTodayTemperature = document.getElementById('todayTemperature');
-            showTodayTemperature.textContent = temperaturesList[0] + '°C';
+            showTodayTemperature.textContent = `${temperaturesList[0].toFixed(1)}°C`;
             let showTodayRainChance = document.getElementById('todayRainChance');
             let showTodayRainChanceText = showTodayRainChance.querySelector('span');
             let maxTodayRainChance = todayRainList.length ? Math.max(...todayRainList) : 0;
