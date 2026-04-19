@@ -113,11 +113,11 @@
                     <div id="currentWeather" title="Current Weather" class="grid gap-4 md:grid-cols-[1.2fr_0.9fr_0.9fr]">
                         <div class="section-card flex min-h-[170px] flex-col justify-between p-6">
                             <div class="flex items-start justify-between gap-4">
-                                <div>
+                                <div class="min-w-0">
                                     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Selected city</p>
-                                    <div id="cityName" class="mt-3 font-display text-4xl font-bold text-ink md:text-5xl"></div>
+                                    <div id="cityName" class="mt-3 line-clamp-2 font-display text-3xl font-bold leading-tight text-ink sm:text-4xl md:text-5xl"></div>
                                 </div>
-                                <div class="rounded-2xl bg-accent/10 p-4 text-accent">
+                                <div class="shrink-0 rounded-2xl bg-accent/10 p-4 text-accent">
                                     <i class="fa-solid fa-location-dot text-2xl"></i>
                                 </div>
                             </div>
@@ -146,7 +146,7 @@
                             </div>
                             <div>
                                 <div id="todayTemperature" class="mt-6 font-display text-4xl font-bold text-ink"></div>
-                                <div id="todayRainChance" class="mt-3 inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                                <div id="todayRainChance" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
                                     <i class="fa-solid fa-cloud-rain text-sm"></i>
                                     <span></span>
                                 </div>
@@ -331,6 +331,13 @@
 
         function getBringList(todayTemperature, todayRainChance, todayWeather) {
             const items = [];
+            const itemLabels = {
+                umbrella: 'umbrella ☔',
+                'warm layer': 'warm layer 🧥',
+                'light jacket': 'light jacket 🧥',
+                'water bottle': 'water bottle 💧',
+                sunglasses: 'sunglasses 🕶️'
+            };
 
             if (todayRainChance >= 40 || todayWeather.includes('rain')) {
                 items.push('umbrella');
@@ -350,7 +357,9 @@
                 items.push('sunglasses');
             }
 
-            return items.length ? items.join(', ') : 'Just yourself';
+            return items.length
+                ? items.map((item) => itemLabels[item] || item).join(', ')
+                : 'Just yourself ✨';
         }
 
         function getActivityContext(todayTemperature, todayWeather, todayRainChance, todayTimeList, todayRainList, todayTemperaturesList) {
