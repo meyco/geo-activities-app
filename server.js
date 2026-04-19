@@ -179,50 +179,54 @@ async function fetchBerlinDeEvents() {
   const results = [];
 
   for (const source of BERLIN_DE_SOURCES) {
-    const html = await fetchHtml(source.url);
-    const $ = load(html);
-    const items = [];
+    try {
+      const html = await fetchHtml(source.url);
+      const $ = load(html);
+      const items = [];
 
-    $('h3 a').each((_, element) => {
-      if (items.length >= 6) {
-        return false;
-      }
+      $('h3 a').each((_, element) => {
+        if (items.length >= 6) {
+          return false;
+        }
 
-      const href = $(element).attr('href');
-      const name = normalizeText($(element).text());
+        const href = $(element).attr('href');
+        const name = normalizeText($(element).text());
 
-      if (!href || !name) {
-        return;
-      }
+        if (!href || !name) {
+          return;
+        }
 
-      const absoluteUrl = new URL(href, source.url).toString();
+        const absoluteUrl = new URL(href, source.url).toString();
 
-      if (
-        absoluteUrl.includes('/today/') ||
-        absoluteUrl.includes('/tomorrow/') ||
-        absoluteUrl.includes('/weekend/') ||
-        absoluteUrl.includes('/events/') && !absoluteUrl.includes('/tickets/') && !absoluteUrl.includes('/shopping/')
-      ) {
-        return;
-      }
+        if (
+          absoluteUrl.includes('/today/') ||
+          absoluteUrl.includes('/tomorrow/') ||
+          absoluteUrl.includes('/weekend/') ||
+          absoluteUrl.includes('/events/') && !absoluteUrl.includes('/tickets/') && !absoluteUrl.includes('/shopping/')
+        ) {
+          return;
+        }
 
-      const card = $(element).closest('h3').parent();
-      const dateText = normalizeText(card.find('.teaser__meta').first().text()) || source.fallbackDate;
-      const description = normalizeText(
-        card.find('.inner .text, p.text').first().text().replace(/\s*more\s*$/i, '')
-      );
+        const card = $(element).closest('h3').parent();
+        const dateText = normalizeText(card.find('.teaser__meta').first().text()) || source.fallbackDate;
+        const description = normalizeText(
+          card.find('.inner .text, p.text').first().text().replace(/\s*more\s*$/i, '')
+        );
 
-      items.push({
-        name,
-        dateText,
-        venue: 'Berlin',
-        source: 'Berlin.de',
-        url: absoluteUrl,
-        description
+        items.push({
+          name,
+          dateText,
+          venue: 'Berlin',
+          source: 'Berlin.de',
+          url: absoluteUrl,
+          description
+        });
       });
-    });
 
-    results.push(...items);
+      results.push(...items);
+    } catch (error) {
+      console.error(`Berlin.de source fetch error for ${source.url}:`, error);
+    }
   }
 
   const enriched = [];
@@ -392,13 +396,28 @@ app.get('/api/events', async (req, res) => {
       return res.json(cachedResponse);
     }
 
-    const [berlinDeEvents, lumaEvents] = await Promise.all([
+    const [berlinDeEventsResult, lumaEventsResult] = await Promise.allSettled([
       fetchBerlinDeEvents(),
       fetchLumaEvents(city || 'Berlin')
     ]);
 
+    const berlinDeEvents = berlinDeEventsResult.status === 'fulfilled' ? berlinDeEventsResult.value : [];
+    const lumaEvents = lumaEventsResult.status === 'fulfilled' ? lumaEventsResult.value : [];
+    const warnings = [];
+
+    if (berlinDeEventsResult.status === 'rejected') {
+      console.error('Berlin.de aggregation error:', berlinDeEventsResult.reason);
+      warnings.push('Some Berlin.de events could not be loaded right now.');
+    }
+
+    if (lumaEventsResult.status === 'rejected') {
+      console.error('Luma aggregation error:', lumaEventsResult.reason);
+      warnings.push('Some Luma events could not be loaded right now.');
+    }
+
     const payload = {
-      results: [...lumaEvents, ...berlinDeEvents]
+      results: [...lumaEvents, ...berlinDeEvents],
+      warning: warnings.length > 0 ? warnings.join(' ') : undefined
     };
 
     setCachedValue(cacheKey, payload, CACHE_TTL_MS.events);
@@ -412,6 +431,7 @@ app.get('/api/events', async (req, res) => {
 app.get('/api/maps-config', (req, res) => {
   res.json({
     browserApiKey: process.env.GOOGLE_MAPS_BROWSER_API_KEY || '',
+    mapId: process.env.GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID',
     defaultCenter: {
       lat: 52.52,
       lng: 13.405
