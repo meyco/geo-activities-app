@@ -295,6 +295,31 @@
             });
         }
 
+        function adjustCityNameFontSize() {
+            const cityNameElement = document.getElementById('cityName');
+
+            if (!cityNameElement) {
+                return;
+            }
+
+            const isDesktop = window.innerWidth >= 768;
+            const maxFontSize = isDesktop ? 48 : 36;
+            const minFontSize = isDesktop ? 28 : 24;
+            let nextFontSize = maxFontSize;
+
+            cityNameElement.style.fontSize = `${maxFontSize}px`;
+            cityNameElement.style.lineHeight = '1.1';
+
+            while (
+                nextFontSize > minFontSize &&
+                (cityNameElement.scrollHeight > cityNameElement.clientHeight + 1 ||
+                    cityNameElement.scrollWidth > cityNameElement.clientWidth + 1)
+            ) {
+                nextFontSize -= 1;
+                cityNameElement.style.fontSize = `${nextFontSize}px`;
+            }
+        }
+
         function formatHourLabel(time) {
             const date = new Date(time.replace(' ', 'T'));
             return date.toLocaleTimeString('en-GB', {
@@ -589,6 +614,7 @@
             let heroCityName = document.getElementById("heroCityName");
             showCityName.textContent = getInputCity;
             heroCityName.textContent = getInputCity;
+            adjustCityNameFontSize();
 
             let geocodeResponse = await fetch(`/api/geocode?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
             let geocodeData = await geocodeResponse.json();
@@ -1007,6 +1033,7 @@
         });
 
         window.addEventListener('resize', schedulePlotResize);
+        window.addEventListener('resize', adjustCityNameFontSize);
 
     </script>
     <a href="https://www.flaticon.com/free-icons/vacation" title="icons">Icons created by Freepik - Flaticon</a>
