@@ -431,6 +431,7 @@ app.get('/api/events', async (req, res) => {
 app.get('/api/maps-config', (req, res) => {
   res.json({
     browserApiKey: process.env.GOOGLE_MAPS_BROWSER_API_KEY || '',
+    mapId: process.env.GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID',
     defaultCenter: {
       lat: 52.52,
       lng: 13.405

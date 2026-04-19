@@ -36,6 +36,7 @@ npm run dev
 
 ```env
 GOOGLE_MAPS_BROWSER_API_KEY=
+GOOGLE_MAPS_MAP_ID=
 GOOGLE_MAPS_API_KEY=
 OPENCAGE_API_KEY=
 OPENWEATHER_API_KEY=
@@ -50,6 +51,11 @@ LUMA_EVENT_URLS=
   - Allow `http://localhost:3000/*`
   - Allow your Vercel production domain, for example `https://your-app.vercel.app/*`
   - Restrict API usage to `Maps JavaScript API`
+
+- `GOOGLE_MAPS_MAP_ID`
+  - Optional but recommended for Advanced Markers
+  - Create a map ID in Google Cloud and set it here for production
+  - If omitted, the app falls back to `DEMO_MAP_ID`
 
 - `GOOGLE_MAPS_API_KEY`
   - Use on the server only

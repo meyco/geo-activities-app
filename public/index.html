@@ -486,7 +486,7 @@
             if (!googleMapsPromise) {
                 googleMapsPromise = new Promise((resolve, reject) => {
                     const script = document.createElement('script');
-                    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
+                    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async&v=weekly&libraries=marker`;
                     script.async = true;
                     script.defer = true;
                     script.onload = () => resolve(window.google.maps);
@@ -496,6 +496,31 @@
             }
 
             return googleMapsPromise;
+        }
+
+        function createMapMarkerElement({ backgroundColor, borderColor, glyphColor, scale = 1 }) {
+            const markerElement = document.createElement('div');
+            markerElement.style.width = `${18 * scale}px`;
+            markerElement.style.height = `${18 * scale}px`;
+            markerElement.style.borderRadius = '999px';
+            markerElement.style.background = backgroundColor;
+            markerElement.style.border = `2px solid ${borderColor}`;
+            markerElement.style.boxShadow = '0 6px 16px rgba(15, 23, 42, 0.18)';
+            markerElement.style.boxSizing = 'border-box';
+            markerElement.style.position = 'relative';
+
+            const markerCore = document.createElement('div');
+            markerCore.style.position = 'absolute';
+            markerCore.style.top = '50%';
+            markerCore.style.left = '50%';
+            markerCore.style.width = `${6 * scale}px`;
+            markerCore.style.height = `${6 * scale}px`;
+            markerCore.style.borderRadius = '999px';
+            markerCore.style.background = glyphColor;
+            markerCore.style.transform = 'translate(-50%, -50%)';
+
+            markerElement.appendChild(markerCore);
+            return markerElement;
         }
 
         async function renderEventMap(events, attractions, cityCoordinates) {
@@ -515,10 +540,12 @@
 
             try {
                 const maps = await loadGoogleMaps(mapsConfig.browserApiKey);
+                const { AdvancedMarkerElement } = await google.maps.importLibrary('marker');
                 const center = cityCoordinates || mappableEvents[0]?.coordinates || mappableAttractions[0]?.coordinates || mapsConfig.defaultCenter;
                 const map = new maps.Map(mapElement, {
                     center,
                     zoom: (mappableEvents.length > 0 || mappableAttractions.length > 0) ? 11 : 12,
+                    mapId: mapsConfig.mapId || 'DEMO_MAP_ID',
                     mapTypeControl: false,
                     streetViewControl: false
                 });
@@ -527,27 +554,31 @@
 
                 if (cityCoordinates) {
                     bounds.extend(cityCoordinates);
-                    new maps.Marker({
+                    const cityMarker = new AdvancedMarkerElement({
                         position: cityCoordinates,
                         map,
                         title: 'Selected city'
                     });
+                    cityMarker.append(createMapMarkerElement({
+                        backgroundColor: '#1f2933',
+                        borderColor: '#ffffff',
+                        glyphColor: '#fff8ee',
+                        scale: 0.9
+                    }));
                 }
 
                 mappableEvents.forEach((event) => {
-                    const marker = new maps.Marker({
+                    const marker = new AdvancedMarkerElement({
                         position: event.coordinates,
                         map,
-                        title: event.name,
-                        icon: {
-                            path: maps.SymbolPath.CIRCLE,
-                            scale: 8,
-                            fillColor: '#db5a42',
-                            fillOpacity: 1,
-                            strokeColor: '#ffffff',
-                            strokeWeight: 2
-                        }
+                        title: event.name
                     });
+                    marker.append(createMapMarkerElement({
+                        backgroundColor: '#db5a42',
+                        borderColor: '#ffffff',
+                        glyphColor: '#fff8ee',
+                        scale: 1
+                    }));
                     bounds.extend(event.coordinates);
 
                     marker.addListener('click', () => {
@@ -564,19 +595,17 @@
                 });
 
                 mappableAttractions.forEach((place) => {
-                    const marker = new maps.Marker({
+                    const marker = new AdvancedMarkerElement({
                         position: place.coordinates,
                         map,
-                        title: place.name,
-                        icon: {
-                            path: maps.SymbolPath.CIRCLE,
-                            scale: 7,
-                            fillColor: '#0f766e',
-                            fillOpacity: 0.95,
-                            strokeColor: '#ffffff',
-                            strokeWeight: 2
-                        }
+                        title: place.name
                     });
+                    marker.append(createMapMarkerElement({
+                        backgroundColor: '#0f766e',
+                        borderColor: '#ffffff',
+                        glyphColor: '#fff8ee',
+                        scale: 0.92
+                    }));
                     bounds.extend(place.coordinates);
 
                     marker.addListener('click', () => {
