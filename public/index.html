@@ -105,7 +105,7 @@
                     <form id="searchForm" class="grid gap-3 rounded-[1.75rem] border border-white/50 bg-white/65 p-4 shadow-soft md:grid-cols-[1fr_1fr_auto] md:items-center">
                         <input class="field-input" type="text" value="Berlin" id="inputCity" title="Choose your City" placeholder="City" />
                         <input class="field-input" type="text" value="Germany" id="inputCountry" title="Choose your Country" placeholder="Country" />
-                        <button class="inline-flex items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800" role="button" type="button" onclick="main()">
+                        <button id="searchButton" class="inline-flex items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60" role="button" type="button" onclick="main()">
                             Explore Now
                         </button>
                     </form>
@@ -267,6 +267,10 @@
     <script>
         let googleMapsPromise;
         let plotResizeFrame;
+        let isSearching = false;
+        let lastSearchKey = '';
+        let lastSearchAt = 0;
+        const SEARCH_DEDUP_WINDOW_MS = 15000;
 
         function resizeForecastPlots() {
             const todayPlot = document.getElementById('TodayTemperature');
@@ -502,12 +506,44 @@
             }
         }
 
+        function setSearchButtonLoading(isLoading) {
+            const searchButton = document.getElementById('searchButton');
+
+            if (!searchButton) {
+                return;
+            }
+
+            searchButton.disabled = isLoading;
+            searchButton.textContent = isLoading ? 'Loading...' : 'Explore Now';
+        }
+
         async function main() {
+            if (isSearching) {
+                return;
+            }
+
             let inputCity = document.getElementById("inputCity");
-            let getInputCity = inputCity.value;
+            let getInputCity = inputCity.value.trim();
 
             let inputCountry = document.getElementById("inputCountry");
-            let getInputCountry = inputCountry.value;
+            let getInputCountry = inputCountry.value.trim();
+            let searchKey = `${getInputCity.toLowerCase()}::${getInputCountry.toLowerCase()}`;
+
+            if (!getInputCity || !getInputCountry) {
+                alert('Please enter both a city and country.');
+                return;
+            }
+
+            if (searchKey === lastSearchKey && Date.now() - lastSearchAt < SEARCH_DEDUP_WINDOW_MS) {
+                return;
+            }
+
+            isSearching = true;
+            setSearchButtonLoading(true);
+            lastSearchKey = searchKey;
+            lastSearchAt = Date.now();
+
+            try {
 
             let showCityName = document.getElementById("cityName");
             let heroCityName = document.getElementById("heroCityName");
@@ -932,6 +968,10 @@
                 displayModeBar: false
             });
             schedulePlotResize();
+            } finally {
+                isSearching = false;
+                setSearchButtonLoading(false);
+            }
 
         }
 

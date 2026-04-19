@@ -11,8 +11,15 @@ const port = Number(process.env.PORT) || 3000;
 const SCRAPER_USER_AGENT = 'geo-activities-app/1.0 (+local dev)';
 const berlinEventDetailsCache = new Map();
 const addressCoordinatesCache = new Map();
+const apiResponseCache = new Map();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const CACHE_TTL_MS = {
+  geocode: 1000 * 60 * 60 * 24,
+  events: 1000 * 60 * 15,
+  weather: 1000 * 60 * 10,
+  places: 1000 * 60 * 30
+};
 
 const BERLIN_DE_SOURCES = [
   {
@@ -40,6 +47,28 @@ function parseLumaEventUrls() {
     .split(',')
     .map((url) => url.trim())
     .filter(Boolean);
+}
+
+function getCachedValue(cacheKey) {
+  const entry = apiResponseCache.get(cacheKey);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (Date.now() > entry.expiresAt) {
+    apiResponseCache.delete(cacheKey);
+    return null;
+  }
+
+  return entry.value;
+}
+
+function setCachedValue(cacheKey, value, ttlMs) {
+  apiResponseCache.set(cacheKey, {
+    value,
+    expiresAt: Date.now() + ttlMs
+  });
 }
 
 async function fetchHtml(url) {
@@ -297,8 +326,15 @@ app.get('/api/geocode', async (req, res) => {
   url.searchParams.set('q', `${city}, ${country}`);
   url.searchParams.set('key', apiKey);
   url.searchParams.set('limit', '1');
+  const cacheKey = `geocode:${city.toLowerCase()}:${country.toLowerCase()}`;
 
   try {
+    const cachedResponse = getCachedValue(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
+
     const response = await fetch(url);
     const data = await response.json();
 
@@ -317,10 +353,13 @@ app.get('/api/geocode', async (req, res) => {
       });
     }
 
-    res.json({
+    const payload = {
       formatted: data.results[0].formatted,
       geometry: data.results[0].geometry
-    });
+    };
+
+    setCachedValue(cacheKey, payload, CACHE_TTL_MS.geocode);
+    res.json(payload);
   } catch (error) {
     console.error('OpenCage error:', error);
     res.status(500).json({ error: 'Failed to geocode location' });
@@ -329,6 +368,7 @@ app.get('/api/geocode', async (req, res) => {
 
 app.get('/api/events', async (req, res) => {
   const city = normalizeText(req.query.city?.toString() || '');
+  const cacheKey = `events:${city.toLowerCase() || 'berlin'}`;
 
   try {
     if (city && city.toLowerCase() !== 'berlin') {
@@ -338,14 +378,23 @@ app.get('/api/events', async (req, res) => {
       });
     }
 
+    const cachedResponse = getCachedValue(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
+
     const [berlinDeEvents, lumaEvents] = await Promise.all([
       fetchBerlinDeEvents(),
       fetchLumaEvents(city || 'Berlin')
     ]);
 
-    res.json({
+    const payload = {
       results: [...lumaEvents, ...berlinDeEvents]
-    });
+    };
+
+    setCachedValue(cacheKey, payload, CACHE_TTL_MS.events);
+    res.json(payload);
   } catch (error) {
     console.error('Event scraping error:', error);
     res.status(500).json({ error: 'Failed to fetch events' });
@@ -380,8 +429,15 @@ app.get('/api/weather', async (req, res) => {
   url.searchParams.set('lon', lon);
   url.searchParams.set('appid', apiKey);
   url.searchParams.set('units', 'metric');
+  const cacheKey = `weather:${Number(lat).toFixed(3)}:${Number(lon).toFixed(3)}`;
 
   try {
+    const cachedResponse = getCachedValue(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
+
     const response = await fetch(url);
     const data = await response.json();
 
@@ -391,6 +447,7 @@ app.get('/api/weather', async (req, res) => {
       });
     }
 
+    setCachedValue(cacheKey, data, CACHE_TTL_MS.weather);
     res.json(data);
   } catch (error) {
     console.error('OpenWeather error:', error);
@@ -402,8 +459,15 @@ app.get('/api/search', async (req, res) => {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   const latitude = Number(req.query.lat);
   const longitude = Number(req.query.lon);
+  const cacheKey = `places:${latitude.toFixed(3)}:${longitude.toFixed(3)}`;
 
   try {
+    const cachedResponse = getCachedValue(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
+
     const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
       method: 'POST',
       headers: {
@@ -448,7 +512,9 @@ app.get('/api/search', async (req, res) => {
         : null
     }));
 
-    res.json({ results });
+    const payload = { results };
+    setCachedValue(cacheKey, payload, CACHE_TTL_MS.places);
+    res.json(payload);
   } catch (error) {
     console.error('Places API error:', error);
     res.status(500).json({ error: 'Failed to fetch places' });
