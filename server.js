@@ -3,12 +3,16 @@ dotenv.config();
 import express from 'express';
 import fetch from 'node-fetch';
 import { load } from 'cheerio';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const SCRAPER_USER_AGENT = 'geo-activities-app/1.0 (+local dev)';
 const berlinEventDetailsCache = new Map();
 const addressCoordinatesCache = new Map();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const BERLIN_DE_SOURCES = [
   {
@@ -22,6 +26,10 @@ const BERLIN_DE_SOURCES = [
 ];
 
 app.use(express.static('public'));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 function normalizeText(value) {
   return value?.replace(/\s+/g, ' ').trim() || '';
