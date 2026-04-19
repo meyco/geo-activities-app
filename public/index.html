@@ -110,14 +110,14 @@
                         </button>
                     </form>
 
-                    <div id="currentWeather" title="Current Weather" class="grid gap-4 md:grid-cols-[1.2fr_0.9fr_0.9fr]">
-                        <div class="section-card flex min-h-[170px] flex-col justify-between p-6">
+                    <div id="currentWeather" title="Current Weather" class="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
+                        <div class="section-card min-w-0 flex min-h-[170px] flex-col justify-between p-6">
                             <div class="flex items-start justify-between gap-4">
-                                <div>
+                                <div class="min-w-0">
                                     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Selected city</p>
-                                    <div id="cityName" class="mt-3 font-display text-4xl font-bold text-ink md:text-5xl"></div>
+                                    <div id="cityName" class="mt-3 overflow-hidden line-clamp-2 font-display text-3xl font-bold leading-tight text-ink sm:text-4xl md:text-5xl"></div>
                                 </div>
-                                <div class="rounded-2xl bg-accent/10 p-4 text-accent">
+                                <div class="shrink-0 rounded-2xl bg-accent/10 p-4 text-accent">
                                     <i class="fa-solid fa-location-dot text-2xl"></i>
                                 </div>
                             </div>
@@ -146,7 +146,7 @@
                             </div>
                             <div>
                                 <div id="todayTemperature" class="mt-6 font-display text-4xl font-bold text-ink"></div>
-                                <div id="todayRainChance" class="mt-3 inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                                <div id="todayRainChance" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
                                     <i class="fa-solid fa-cloud-rain text-sm"></i>
                                     <span></span>
                                 </div>
@@ -295,6 +295,31 @@
             });
         }
 
+        function adjustCityNameFontSize() {
+            const cityNameElement = document.getElementById('cityName');
+
+            if (!cityNameElement) {
+                return;
+            }
+
+            const isDesktop = window.innerWidth >= 768;
+            const maxFontSize = isDesktop ? 48 : 36;
+            const minFontSize = isDesktop ? 28 : 24;
+            let nextFontSize = maxFontSize;
+
+            cityNameElement.style.fontSize = `${maxFontSize}px`;
+            cityNameElement.style.lineHeight = '1.1';
+
+            while (
+                nextFontSize > minFontSize &&
+                (cityNameElement.scrollHeight > cityNameElement.clientHeight + 1 ||
+                    cityNameElement.scrollWidth > cityNameElement.clientWidth + 1)
+            ) {
+                nextFontSize -= 1;
+                cityNameElement.style.fontSize = `${nextFontSize}px`;
+            }
+        }
+
         function formatHourLabel(time) {
             const date = new Date(time.replace(' ', 'T'));
             return date.toLocaleTimeString('en-GB', {
@@ -331,6 +356,13 @@
 
         function getBringList(todayTemperature, todayRainChance, todayWeather) {
             const items = [];
+            const itemLabels = {
+                umbrella: 'umbrella ☔',
+                'warm layer': 'warm layer 🧥',
+                'light jacket': 'light jacket 🧥',
+                'water bottle': 'water bottle 💧',
+                sunglasses: 'sunglasses 🕶️'
+            };
 
             if (todayRainChance >= 40 || todayWeather.includes('rain')) {
                 items.push('umbrella');
@@ -350,7 +382,9 @@
                 items.push('sunglasses');
             }
 
-            return items.length ? items.join(', ') : 'Just yourself';
+            return items.length
+                ? items.map((item) => itemLabels[item] || item).join(', ')
+                : 'Just yourself ✨';
         }
 
         function getActivityContext(todayTemperature, todayWeather, todayRainChance, todayTimeList, todayRainList, todayTemperaturesList) {
@@ -580,6 +614,7 @@
             let heroCityName = document.getElementById("heroCityName");
             showCityName.textContent = getInputCity;
             heroCityName.textContent = getInputCity;
+            adjustCityNameFontSize();
 
             let geocodeResponse = await fetch(`/api/geocode?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
             let geocodeData = await geocodeResponse.json();
@@ -702,12 +737,12 @@
             let temperaturesList = [];//make Array.
             let timesList = [];//make Array
             let humidList = [];//make Array
-            let weatherNameList = [];
             let rainList = [];
             let todayTemperaturesList = [];
             let todayRainList = [];
             let todayTimeList = [];
-            let weatherIconList = [];
+            let currentWeatherName = list[0]?.weather?.[0]?.description || '';
+            let currentWeatherIcon = list[0]?.weather?.[0]?.icon || '';
             //console.log("dataLists",list);// Check get API data
 
             dailyForecastSummary.forEach((day) => {
@@ -739,13 +774,13 @@
 
 
             let showTodayWeather = document.getElementById('todayWeather');
-            showTodayWeather.textContent = weatherNameList[0];
+            showTodayWeather.textContent = currentWeatherName;
 
             //Show Today Weather Icon in Div
             let showTodayWeatherIcon = document.getElementById('todayWeatherIcon');
             showTodayWeatherIcon.innerHTML = '';
             let imgWeatherIcon = document.createElement('img');
-            imgWeatherIcon.src = `http://openweathermap.org/img/wn/${weatherIconList[0]}@2x.png`;
+            imgWeatherIcon.src = `http://openweathermap.org/img/wn/${currentWeatherIcon}@2x.png`;
             imgWeatherIcon.className = 'h-20 w-20';
             showTodayWeatherIcon.appendChild(imgWeatherIcon);
 
@@ -753,7 +788,7 @@
 
 
             let showTodayTemperature = document.getElementById('todayTemperature');
-            showTodayTemperature.textContent = temperaturesList[0] + '°C';
+            showTodayTemperature.textContent = `${temperaturesList[0].toFixed(1)}°C`;
             let showTodayRainChance = document.getElementById('todayRainChance');
             let showTodayRainChanceText = showTodayRainChance.querySelector('span');
             let maxTodayRainChance = todayRainList.length ? Math.max(...todayRainList) : 0;
@@ -775,7 +810,7 @@
 
 
             //Using in Activiity condtion
-            let todayWeather = weatherNameList[0];
+            let todayWeather = currentWeatherName;
             let todayTemperature = temperaturesList[0];
             let todayRainChance = todayRainList[0];
             let activityContext = getActivityContext(
@@ -998,6 +1033,7 @@
         });
 
         window.addEventListener('resize', schedulePlotResize);
+        window.addEventListener('resize', adjustCityNameFontSize);
 
     </script>
     <a href="https://www.flaticon.com/free-icons/vacation" title="icons">Icons created by Freepik - Flaticon</a>
