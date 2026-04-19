@@ -79,6 +79,13 @@
         .plot-surface > div {
             min-height: 280px;
         }
+
+        .city-name-balance {
+            font-size: clamp(2rem, 3.4vw, 3rem);
+            line-height: 1.05;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
     </style>
 
 </head>
@@ -115,7 +122,7 @@
                             <div class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
                                     <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Selected city</p>
-                                    <div id="cityName" class="mt-3 overflow-hidden line-clamp-2 font-display text-3xl font-bold leading-tight text-ink sm:text-4xl md:text-5xl"></div>
+                                    <div id="cityName" class="city-name-balance mt-3 overflow-hidden line-clamp-2 font-display font-bold text-ink"></div>
                                 </div>
                                 <div class="shrink-0 rounded-2xl bg-accent/10 p-4 text-accent">
                                     <i class="fa-solid fa-location-dot text-2xl"></i>
@@ -293,31 +300,6 @@
             plotResizeFrame = requestAnimationFrame(() => {
                 resizeForecastPlots();
             });
-        }
-
-        function adjustCityNameFontSize() {
-            const cityNameElement = document.getElementById('cityName');
-
-            if (!cityNameElement) {
-                return;
-            }
-
-            const isDesktop = window.innerWidth >= 768;
-            const maxFontSize = isDesktop ? 48 : 36;
-            const minFontSize = isDesktop ? 28 : 24;
-            let nextFontSize = maxFontSize;
-
-            cityNameElement.style.fontSize = `${maxFontSize}px`;
-            cityNameElement.style.lineHeight = '1.1';
-            const maxAllowedHeight = maxFontSize * 1.1 * 2 + 2;
-
-            while (
-                nextFontSize > minFontSize &&
-                cityNameElement.scrollHeight > maxAllowedHeight
-            ) {
-                nextFontSize -= 1;
-                cityNameElement.style.fontSize = `${nextFontSize}px`;
-            }
         }
 
         function formatHourLabel(time) {
@@ -614,7 +596,6 @@
             let heroCityName = document.getElementById("heroCityName");
             showCityName.textContent = getInputCity;
             heroCityName.textContent = getInputCity;
-            adjustCityNameFontSize();
 
             let geocodeResponse = await fetch(`/api/geocode?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
             let geocodeData = await geocodeResponse.json();
@@ -1033,7 +1014,6 @@
         });
 
         window.addEventListener('resize', schedulePlotResize);
-        window.addEventListener('resize', adjustCityNameFontSize);
 
     </script>
     <a href="https://www.flaticon.com/free-icons/vacation" title="icons">Icons created by Freepik - Flaticon</a>
