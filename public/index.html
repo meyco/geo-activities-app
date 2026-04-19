@@ -105,7 +105,7 @@
                     <form id="searchForm" class="grid gap-3 rounded-[1.75rem] border border-white/50 bg-white/65 p-4 shadow-soft md:grid-cols-[1fr_1fr_auto] md:items-center">
                         <input class="field-input" type="text" value="Berlin" id="inputCity" title="Choose your City" placeholder="City" />
                         <input class="field-input" type="text" value="Germany" id="inputCountry" title="Choose your Country" placeholder="Country" />
-                        <button class="inline-flex items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800" role="button" type="button" onclick="main()">
+                        <button id="searchButton" class="inline-flex items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60" role="button" type="button" onclick="main()">
                             Explore Now
                         </button>
                     </form>
@@ -267,6 +267,10 @@
     <script>
         let googleMapsPromise;
         let plotResizeFrame;
+        let isSearching = false;
+        let lastSearchKey = '';
+        let lastSearchAt = 0;
+        const SEARCH_DEDUP_WINDOW_MS = 15000;
 
         function resizeForecastPlots() {
             const todayPlot = document.getElementById('TodayTemperature');
@@ -365,6 +369,37 @@
             }
 
             return { reason, bestTime, bring };
+        }
+
+        function buildDailyForecastSummary(forecastList) {
+            const groupedForecast = new Map();
+
+            forecastList.forEach((item) => {
+                const dateKey = item.dt_txt.slice(0, 10);
+
+                if (!groupedForecast.has(dateKey)) {
+                    groupedForecast.set(dateKey, []);
+                }
+
+                groupedForecast.get(dateKey).push(item);
+            });
+
+            return [...groupedForecast.entries()].slice(0, 5).map(([dateKey, entries]) => {
+                const averageTemperature = entries.reduce((sum, entry) => sum + entry.main.temp, 0) / entries.length;
+                const averageHumidity = entries.reduce((sum, entry) => sum + entry.main.humidity, 0) / entries.length;
+                const maxRainChance = Math.max(...entries.map((entry) => (entry.pop || 0) * 100));
+                const label = new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-GB', {
+                    month: 'short',
+                    day: 'numeric'
+                });
+
+                return {
+                    label,
+                    averageTemperature,
+                    averageHumidity,
+                    maxRainChance
+                };
+            });
         }
 
         async function getMapsConfig() {
@@ -502,12 +537,44 @@
             }
         }
 
+        function setSearchButtonLoading(isLoading) {
+            const searchButton = document.getElementById('searchButton');
+
+            if (!searchButton) {
+                return;
+            }
+
+            searchButton.disabled = isLoading;
+            searchButton.textContent = isLoading ? 'Loading...' : 'Explore Now';
+        }
+
         async function main() {
+            if (isSearching) {
+                return;
+            }
+
             let inputCity = document.getElementById("inputCity");
-            let getInputCity = inputCity.value;
+            let getInputCity = inputCity.value.trim();
 
             let inputCountry = document.getElementById("inputCountry");
-            let getInputCountry = inputCountry.value;
+            let getInputCountry = inputCountry.value.trim();
+            let searchKey = `${getInputCity.toLowerCase()}::${getInputCountry.toLowerCase()}`;
+
+            if (!getInputCity || !getInputCountry) {
+                alert('Please enter both a city and country.');
+                return;
+            }
+
+            if (searchKey === lastSearchKey && Date.now() - lastSearchAt < SEARCH_DEDUP_WINDOW_MS) {
+                return;
+            }
+
+            isSearching = true;
+            setSearchButtonLoading(true);
+            lastSearchKey = searchKey;
+            lastSearchAt = Date.now();
+
+            try {
 
             let showCityName = document.getElementById("cityName");
             let heroCityName = document.getElementById("heroCityName");
@@ -631,8 +698,7 @@
 
 
             let list = data.list;
-            let fiveDayDates = [...new Set(list.map((item) => item.dt_txt.slice(0, 10)))].slice(0, 5);
-            let fiveDayList = list.filter((item) => fiveDayDates.includes(item.dt_txt.slice(0, 10)));
+            let dailyForecastSummary = buildDailyForecastSummary(list);
             let temperaturesList = [];//make Array.
             let timesList = [];//make Array
             let humidList = [];//make Array
@@ -644,24 +710,12 @@
             let weatherIconList = [];
             //console.log("dataLists",list);// Check get API data
 
-            for (let i = 0; i < fiveDayList.length; i++) {
-                let temperature = fiveDayList[i].main.temp;//get tempertures Array.They alerady Arra
-                let time = fiveDayList[i].dt_txt;//get time Array
-                let humid = fiveDayList[i].main.humidity;//get humid Array
-                let weatherName = fiveDayList[i].weather[0].description;//get weather Name Array
-                let rain = fiveDayList[i].pop * 100;//get weather Name Array
-                //let uv = list[i].weather[0].description;//get uv Array
-                let weatherIcon = fiveDayList[i].weather[0].icon;//get weather Name Array
-
-
-                temperaturesList.push(temperature); // push is add to number to temperaturesList Array.
-                timesList.push(time); // add to number to Array.
-                humidList.push(humid); // add to number to  Array.
-                weatherNameList.push(weatherName); // add to number to  Array.
-                rainList.push(rain); // add to number to  Array.
-                weatherIconList.push(weatherIcon); // add to number to  Array.
-                //uvListt.push(uv); // add to number to  Array.
-            }
+            dailyForecastSummary.forEach((day) => {
+                temperaturesList.push(day.averageTemperature);
+                timesList.push(day.label);
+                humidList.push(day.averageHumidity);
+                rainList.push(day.maxRainChance);
+            });
 
             for (let i = 0; i < 8; i++) {
                 let temperature = list[i].main.temp;//get tempertures Array.They alerady Arra
@@ -784,14 +838,7 @@
 
 
 
-            const fiveDayLabels = timesList.map((time) => {
-                const date = new Date(time.replace(' ', 'T'));
-                return date.toLocaleString('en-GB', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit'
-                });
-            });
+            const fiveDayLabels = timesList;
 
             const todayLabels = todayTimeList.map((time) => {
                 const date = new Date(time.replace(' ', 'T'));
@@ -932,6 +979,10 @@
                 displayModeBar: false
             });
             schedulePlotResize();
+            } finally {
+                isSearching = false;
+                setSearchButtonLoading(false);
+            }
 
         }
 
