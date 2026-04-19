@@ -479,7 +479,7 @@
         }
 
         async function loadGoogleMaps(apiKey) {
-            if (window.google?.maps) {
+            if (window.google?.maps?.Map && window.google?.maps?.InfoWindow && window.google?.maps?.LatLngBounds) {
                 return window.google.maps;
             }
 
@@ -540,7 +540,12 @@
 
             try {
                 const maps = await loadGoogleMaps(mapsConfig.browserApiKey);
-                const { AdvancedMarkerElement } = await google.maps.importLibrary('marker');
+                const AdvancedMarkerElement = maps.marker?.AdvancedMarkerElement;
+
+                if (!AdvancedMarkerElement) {
+                    throw new Error('AdvancedMarkerElement is unavailable');
+                }
+
                 const center = cityCoordinates || mappableEvents[0]?.coordinates || mappableAttractions[0]?.coordinates || mapsConfig.defaultCenter;
                 const map = new maps.Map(mapElement, {
                     center,
