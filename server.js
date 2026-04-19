@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 import { load } from 'cheerio';
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.PORT) || 3000;
 const SCRAPER_USER_AGENT = 'geo-activities-app/1.0 (+local dev)';
 const berlinEventDetailsCache = new Map();
 const addressCoordinatesCache = new Map();
@@ -447,6 +447,10 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Proxy server running at http://localhost:${port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Proxy server running at http://localhost:${port}`);
+  });
+}
+
+export default app;

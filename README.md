@@ -1,29 +1,75 @@
-# tripadvisor-project
- Final Project in the JavaScript Course at ReDI School
+# Geo Activities App
 
-# Setup guide for the Weather-Based Activity Suggestion Service
+Weather, nearby attractions, and Berlin-focused event discovery in a single Express app.
 
-We have developed a service that suggests activities based on weather forecasts. This service comes in two versions:
+## Features
 
-1. HTML Version: Simply open the file in a browser to use.`tripadvisor-project/public/FinalProject.html`
-1. Node.js Version: Requires setting up a local server.
+- Current weather and 5-day forecast via OpenWeather
+- City geocoding via OpenCage
+- Nearby attractions via Google Places API (New)
+- Interactive Google Map with event and attraction pins
+- Berlin.de and selected Luma event aggregation
 
+## Local development
 
-This document explains the setup process for `version 2`, the Node.js version.
-This application uses the Tripadvisor API, which is free for up to 5000 calls. To use this API, you need to set up either **domain restrictions or IP address restrictions**.
+1. Install dependencies:
 
+```bash
+npm install
+```
 
-#　Preparation for Tripadvisor API Use
+2. Copy the example environment file and fill in your keys:
 
-1. Visit Tripadvisor Developers and create an account.  `https://www.tripadvisor.com/developers`
-1. Check your IP address here `https://whatismyipaddress.com/`
-1. In the My API menu, register your current IP address, appending `/32` to the end. For example, if your IP address is `99.123.123.12`, register it as `99.123.123.12/32`.
-1. Copy the API key from the My API menu and add it to **line 9 of server.js** in the tripadvisor-project folder.
+```bash
+cp .env.example .env
+```
 
+3. Start the app:
 
-# Application Setup Steps
+```bash
+npm run dev
+```
 
-1. Open Terminal and navigate to the project directory using the following command:`cd /path/to/your/tripadvisor-project` (After entering `cd　`, it’s convenient to drag and drop the folder into the terminal window.)
-1. Start the server by running the following command in Terminal:`node server.js`
-1. Open your browser and go to `http://localhost:3000` to use the application.
-1. With these steps, you are ready to use the weather-based activity suggestion service locally.
+4. Open [http://localhost:3000](http://localhost:3000)
+
+## Required environment variables
+
+```env
+GOOGLE_MAPS_BROWSER_API_KEY=
+GOOGLE_MAPS_API_KEY=
+OPENCAGE_API_KEY=
+OPENWEATHER_API_KEY=
+LUMA_EVENT_URLS=
+```
+
+## Recommended Google API setup
+
+- `GOOGLE_MAPS_BROWSER_API_KEY`
+  - Use for the browser map only
+  - Restrict by `Websites`
+  - Allow `http://localhost:3000/*`
+  - Allow your Vercel production domain, for example `https://your-app.vercel.app/*`
+  - Restrict API usage to `Maps JavaScript API`
+
+- `GOOGLE_MAPS_API_KEY`
+  - Use on the server only
+  - Do not expose it in the browser
+  - Restrict API usage to `Places API`
+
+## Deploying to Vercel
+
+This project is compatible with Vercel's Express support:
+
+- `public/` is served as static assets
+- `server.js` handles the `/api/*` routes
+
+Set the same environment variables from `.env.example` in the Vercel project settings:
+
+- Vercel Dashboard -> Project -> Settings -> Environment Variables
+
+After that, deploy by connecting the repository in Vercel or by using the Vercel CLI.
+
+## Notes
+
+- `express.static('public')` is used for local development. On Vercel, static assets are served from the `public/` directory by the platform.
+- Event scraping is currently intended for Berlin.

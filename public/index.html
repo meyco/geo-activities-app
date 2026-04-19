@@ -144,7 +144,13 @@
                                     <i class="fa-solid fa-thermometer-half text-2xl"></i>
                                 </div>
                             </div>
-                            <div id="todayTemperature" class="mt-6 font-display text-4xl font-bold text-ink"></div>
+                            <div>
+                                <div id="todayTemperature" class="mt-6 font-display text-4xl font-bold text-ink"></div>
+                                <div id="todayRainChance" class="mt-3 inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                                    <i class="fa-solid fa-cloud-rain text-sm"></i>
+                                    <span></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -205,7 +211,7 @@
                             <h3 class="mt-2 font-display text-2xl font-bold text-ink">Nearby Attractions</h3>
                         </div>
                         <div class="rounded-2xl bg-amber-100 p-4 text-amber-700">
-                            <i class="fa-solid fa-building-columns text-2xl"></i>
+                            <i class="fa-solid fa-compass text-2xl"></i>
                         </div>
                     </div>
                     <div id="result" class="grid gap-3 md:grid-cols-2"></div>
@@ -319,20 +325,20 @@
             return bestIndex === endIndex ? startLabel : `${startLabel}–${endLabel}`;
         }
 
-        function getBringList(todayTemperture, todayRainChance, todayWeather) {
+        function getBringList(todayTemperature, todayRainChance, todayWeather) {
             const items = [];
 
             if (todayRainChance >= 40 || todayWeather.includes('rain')) {
                 items.push('umbrella');
             }
 
-            if (todayTemperture <= 12) {
+            if (todayTemperature <= 12) {
                 items.push('warm layer');
-            } else if (todayTemperture <= 18) {
+            } else if (todayTemperature <= 18) {
                 items.push('light jacket');
             }
 
-            if (todayTemperture >= 24) {
+            if (todayTemperature >= 24) {
                 items.push('water bottle');
             }
 
@@ -343,16 +349,16 @@
             return items.length ? items.join(', ') : 'Just yourself';
         }
 
-        function getActivityContext(todayTemperture, todayWeather, todayRainChance, todayTimeList, todayRainList, todayTemperaturesList) {
+        function getActivityContext(todayTemperature, todayWeather, todayRainChance, todayTimeList, todayRainList, todayTemperaturesList) {
             const bestTime = getBestTimeWindow(todayTimeList, todayRainList, todayTemperaturesList);
-            const bring = getBringList(todayTemperture, todayRainChance, todayWeather);
+            const bring = getBringList(todayTemperature, todayRainChance, todayWeather);
             let reason = '';
 
             if (todayRainChance >= 60 || todayWeather.includes('rain')) {
                 reason = `The forecast leans wet today, so an indoor-friendly plan will feel more comfortable than staying outside for long.`;
-            } else if (todayTemperture >= 25) {
+            } else if (todayTemperature >= 25) {
                 reason = `Warm temperatures and a relatively comfortable forecast make this a strong day for an active outdoor plan.`;
-            } else if (todayTemperture >= 16) {
+            } else if (todayTemperature >= 16) {
                 reason = `The temperature is mild, which makes a walkable or social activity feel easy without too much planning.`;
             } else {
                 reason = `Cooler air makes a cozy or sheltered activity a better fit, especially if you want to stay out longer.`;
@@ -497,11 +503,11 @@
         }
 
         async function main() {
-            let inputCity = document.getElementById("inputCity");// get input text
-            let getInputCity = inputCity.value;  //get user value
+            let inputCity = document.getElementById("inputCity");
+            let getInputCity = inputCity.value;
 
-            let inputCountry = document.getElementById("inputCountry");// get input text
-            let getInputCountry = inputCountry.value;  //get user value
+            let inputCountry = document.getElementById("inputCountry");
+            let getInputCountry = inputCountry.value;
 
             let showCityName = document.getElementById("cityName");
             let heroCityName = document.getElementById("heroCityName");
@@ -517,8 +523,8 @@
                 return;
             }
 
-            let latitude = geocodeData.geometry.lat;//ido
-            let longitude = geocodeData.geometry.lng;//kedo
+            let latitude = geocodeData.geometry.lat;
+            let longitude = geocodeData.geometry.lng;
 
             let cityName = geocodeData.formatted;
             console.log("cityname", cityName);
@@ -562,40 +568,35 @@
                 }
             }
 
-            // Trip api 
             const response = await fetch(`/api/search?lat=${latitude}&lon=${longitude}`);
-            const TripAdvserData = await response.json();
-            console.log("Show Nearby Search", TripAdvserData);// Check get API data
+            const placesData = await response.json();
+            console.log("Nearby places", placesData);
 
-            //get each data from trip advise api
-            let Triplist = TripAdvserData.results;
-            //check
-            if (!Triplist || !Array.isArray(Triplist)) {
-                console.warn("No results from Places API", TripAdvserData);
-                return; //end
+            let nearbyPlaces = placesData.results;
+            if (!nearbyPlaces || !Array.isArray(nearbyPlaces)) {
+                console.warn("No results from Places API", placesData);
+                return;
             }
 
 
 
-            let placeNameList = [];//make Array.
-            let addressList = [];//make Array
-            let placeCoordinatesList = [];//make Array
-            for (let i = 0; i < Triplist.length; i++) {
-                let placeName = Triplist[i].name//get tempertures Array.They alerady Arra
-                let address = Triplist[i].vicinity;//get time Array
-                let coordinates = Triplist[i].coordinates;
+            let placeNameList = [];
+            let addressList = [];
+            let placeCoordinatesList = [];
+            for (let i = 0; i < nearbyPlaces.length; i++) {
+                let placeName = nearbyPlaces[i].name;
+                let address = nearbyPlaces[i].vicinity;
+                let coordinates = nearbyPlaces[i].coordinates;
 
-                placeNameList.push(placeName); // push is add to number to temperaturesList Array.
-                addressList.push(address); // add to number to Array.
-                placeCoordinatesList.push(coordinates); // add to number to Array.
+                placeNameList.push(placeName);
+                addressList.push(address);
+                placeCoordinatesList.push(coordinates);
             }
-            console.log("placeNameList", placeNameList);// Check get API data
-            console.log("addressList", addressList);// Check get API data 
-            //end Trip Advser apis
+            console.log("placeNameList", placeNameList);
+            console.log("addressList", addressList);
 
-            //show TripAdviser to html
-            let showTripAdviserPlace = document.getElementById('result');
-            showTripAdviserPlace.innerHTML = ''; // Clear previous results
+            let nearbyAttractionsContainer = document.getElementById('result');
+            nearbyAttractionsContainer.innerHTML = '';
             for (let i = 0; i < placeNameList.length; i++) {
                 let placeName = placeNameList[i];
                 let address = addressList[i];
@@ -608,10 +609,10 @@
                 placeElement.className = 'rounded-[1.35rem] border border-slate-200/70 bg-white/90 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg';
                 placeElement.innerHTML = `<h4 class="font-display text-xl font-bold text-ink">${placeName}</h4><p class="mt-3 text-sm leading-6 text-slate-600">${address}</p><a class="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-ink transition hover:border-accent hover:text-accent" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>`;
 
-                showTripAdviserPlace.appendChild(placeElement);
+                nearbyAttractionsContainer.appendChild(placeElement);
             }
 
-            await renderEventMap(events, Triplist, { lat: latitude, lng: longitude });
+            await renderEventMap(events, nearbyPlaces, { lat: latitude, lng: longitude });
 
 
 
@@ -626,7 +627,7 @@
                 return;
             }
 
-            console.log("openWeatherMap", data);// Check get API data
+            console.log("openWeatherMap", data);
 
 
             let list = data.list;
@@ -635,7 +636,7 @@
             let temperaturesList = [];//make Array.
             let timesList = [];//make Array
             let humidList = [];//make Array
-            let weatherNameList = [];//get tempertures Array   
+            let weatherNameList = [];
             let rainList = [];
             let todayTemperaturesList = [];
             let todayRainList = [];
@@ -697,8 +698,12 @@
 
 
 
-            let showTodayTemperture = document.getElementById('todayTemperature');
-            showTodayTemperture.textContent = temperaturesList[0] + '°C';
+            let showTodayTemperature = document.getElementById('todayTemperature');
+            showTodayTemperature.textContent = temperaturesList[0] + '°C';
+            let showTodayRainChance = document.getElementById('todayRainChance');
+            let showTodayRainChanceText = showTodayRainChance.querySelector('span');
+            let maxTodayRainChance = todayRainList.length ? Math.max(...todayRainList) : 0;
+            showTodayRainChanceText.textContent = `Today's max rain chance: ${Math.round(maxTodayRainChance)}%`;
 
             let showActivities = document.getElementById('todayActivities');
             let showActivitiesimg = document.getElementById('imgActivities');
@@ -717,11 +722,10 @@
 
             //Using in Activiity condtion
             let todayWeather = weatherNameList[0];
-            let todayTemperture = temperaturesList[0];
+            let todayTemperature = temperaturesList[0];
             let todayRainChance = todayRainList[0];
-            let todayWeatherIcon = weatherIconList[0];
             let activityContext = getActivityContext(
-                todayTemperture,
+                todayTemperature,
                 todayWeather,
                 todayRainChance,
                 todayTimeList,
@@ -731,35 +735,35 @@
 
 
 
-            if (todayTemperture > 35) {//sunny
+            if (todayTemperature > 35) {
                 showActivities.textContent = 'Visit to a Lake in and around Berlin';
                 todayActivitiesText.textContent = 'Cool off with a visit to one of the many lakes.';
                 img.src = './img/Activities/lake.png';
                 showActivitiesimg.appendChild(img);
                 console.log("Above 35");
 
-            } else if (todayTemperture > 30) {
+            } else if (todayTemperature > 30) {
                 showActivities.textContent = 'Laying at the Beach of Lake Wannsee';
                 todayActivitiesText.textContent = 'Relax and sunbathe at Lake Wannsee\'s beach.';
                 img.src = './img/Activities/vacations.png';
                 showActivitiesimg.appendChild(img);
                 console.log("30-35°C");
 
-            } else if (todayTemperture > 25) {
+            } else if (todayTemperature > 25) {
                 showActivities.textContent = 'Biking on Tempelhofer Feld';
                 todayActivitiesText.textContent = 'Take a bike ride on the expansive Tempelhofer Feld.';
                 img.src = './img/Activities/bicycle.png';
                 showActivitiesimg.appendChild(img);
                 console.log("20-30°C");
 
-            } else if (todayTemperture > 20) {
+            } else if (todayTemperature > 20) {
                 showActivities.textContent = 'Walk along the Landwehrkanal';
                 todayActivitiesText.textContent = 'Enjoy a pleasant walk by the canal as the weather gets milder.';
                 img.src = './img/Activities/walking.png';
                 showActivitiesimg.appendChild(img);
                 console.log("10-20°C");
 
-            } else if (todayTemperture > 15) {
+            } else if (todayTemperature > 15) {
                 showActivities.textContent = 'Indoor Swimming';
                 todayActivitiesText.textContent = 'Stay active and warm by swimming indoors.';
                 img.src = './img/Activities/swimming.png';
