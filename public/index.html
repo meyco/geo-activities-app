@@ -523,6 +523,17 @@
             return markerElement;
         }
 
+        function createLegacyMarkerIcon({ fillColor, scale }) {
+            return {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale,
+                fillColor,
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 2
+            };
+        }
+
         async function renderEventMap(events, attractions, cityCoordinates) {
             const mapStatus = document.getElementById('mapStatus');
             const mapElement = document.getElementById('eventMap');
@@ -541,16 +552,12 @@
             try {
                 const maps = await loadGoogleMaps(mapsConfig.browserApiKey);
                 const AdvancedMarkerElement = maps.marker?.AdvancedMarkerElement;
-
-                if (!AdvancedMarkerElement) {
-                    throw new Error('AdvancedMarkerElement is unavailable');
-                }
-
+                const canUseAdvancedMarkers = Boolean(AdvancedMarkerElement);
                 const center = cityCoordinates || mappableEvents[0]?.coordinates || mappableAttractions[0]?.coordinates || mapsConfig.defaultCenter;
                 const map = new maps.Map(mapElement, {
                     center,
                     zoom: (mappableEvents.length > 0 || mappableAttractions.length > 0) ? 11 : 12,
-                    mapId: mapsConfig.mapId || 'DEMO_MAP_ID',
+                    ...(canUseAdvancedMarkers ? { mapId: mapsConfig.mapId || 'DEMO_MAP_ID' } : {}),
                     mapTypeControl: false,
                     streetViewControl: false
                 });
@@ -559,31 +566,52 @@
 
                 if (cityCoordinates) {
                     bounds.extend(cityCoordinates);
-                    const cityMarker = new AdvancedMarkerElement({
-                        position: cityCoordinates,
-                        map,
-                        title: 'Selected city'
-                    });
-                    cityMarker.append(createMapMarkerElement({
-                        backgroundColor: '#1f2933',
-                        borderColor: '#ffffff',
-                        glyphColor: '#fff8ee',
-                        scale: 0.9
-                    }));
+                    if (canUseAdvancedMarkers) {
+                        const cityMarker = new AdvancedMarkerElement({
+                            position: cityCoordinates,
+                            map,
+                            title: 'Selected city'
+                        });
+                        cityMarker.append(createMapMarkerElement({
+                            backgroundColor: '#1f2933',
+                            borderColor: '#ffffff',
+                            glyphColor: '#fff8ee',
+                            scale: 0.9
+                        }));
+                    } else {
+                        new maps.Marker({
+                            position: cityCoordinates,
+                            map,
+                            title: 'Selected city'
+                        });
+                    }
                 }
 
                 mappableEvents.forEach((event) => {
-                    const marker = new AdvancedMarkerElement({
-                        position: event.coordinates,
-                        map,
-                        title: event.name
-                    });
-                    marker.append(createMapMarkerElement({
-                        backgroundColor: '#db5a42',
-                        borderColor: '#ffffff',
-                        glyphColor: '#fff8ee',
-                        scale: 1
-                    }));
+                    const marker = canUseAdvancedMarkers
+                        ? new AdvancedMarkerElement({
+                            position: event.coordinates,
+                            map,
+                            title: event.name
+                        })
+                        : new maps.Marker({
+                            position: event.coordinates,
+                            map,
+                            title: event.name,
+                            icon: createLegacyMarkerIcon({
+                                fillColor: '#db5a42',
+                                scale: 8
+                            })
+                        });
+
+                    if (canUseAdvancedMarkers) {
+                        marker.append(createMapMarkerElement({
+                            backgroundColor: '#db5a42',
+                            borderColor: '#ffffff',
+                            glyphColor: '#fff8ee',
+                            scale: 1
+                        }));
+                    }
                     bounds.extend(event.coordinates);
 
                     marker.addListener('click', () => {
@@ -600,17 +628,30 @@
                 });
 
                 mappableAttractions.forEach((place) => {
-                    const marker = new AdvancedMarkerElement({
-                        position: place.coordinates,
-                        map,
-                        title: place.name
-                    });
-                    marker.append(createMapMarkerElement({
-                        backgroundColor: '#0f766e',
-                        borderColor: '#ffffff',
-                        glyphColor: '#fff8ee',
-                        scale: 0.92
-                    }));
+                    const marker = canUseAdvancedMarkers
+                        ? new AdvancedMarkerElement({
+                            position: place.coordinates,
+                            map,
+                            title: place.name
+                        })
+                        : new maps.Marker({
+                            position: place.coordinates,
+                            map,
+                            title: place.name,
+                            icon: createLegacyMarkerIcon({
+                                fillColor: '#0f766e',
+                                scale: 7
+                            })
+                        });
+
+                    if (canUseAdvancedMarkers) {
+                        marker.append(createMapMarkerElement({
+                            backgroundColor: '#0f766e',
+                            borderColor: '#ffffff',
+                            glyphColor: '#fff8ee',
+                            scale: 0.92
+                        }));
+                    }
                     bounds.extend(place.coordinates);
 
                     marker.addListener('click', () => {
