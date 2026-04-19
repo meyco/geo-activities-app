@@ -702,12 +702,12 @@
             let temperaturesList = [];//make Array.
             let timesList = [];//make Array
             let humidList = [];//make Array
-            let weatherNameList = [];
             let rainList = [];
             let todayTemperaturesList = [];
             let todayRainList = [];
             let todayTimeList = [];
-            let weatherIconList = [];
+            let currentWeatherName = list[0]?.weather?.[0]?.description || '';
+            let currentWeatherIcon = list[0]?.weather?.[0]?.icon || '';
             //console.log("dataLists",list);// Check get API data
 
             dailyForecastSummary.forEach((day) => {
@@ -739,13 +739,13 @@
 
 
             let showTodayWeather = document.getElementById('todayWeather');
-            showTodayWeather.textContent = weatherNameList[0];
+            showTodayWeather.textContent = currentWeatherName;
 
             //Show Today Weather Icon in Div
             let showTodayWeatherIcon = document.getElementById('todayWeatherIcon');
             showTodayWeatherIcon.innerHTML = '';
             let imgWeatherIcon = document.createElement('img');
-            imgWeatherIcon.src = `http://openweathermap.org/img/wn/${weatherIconList[0]}@2x.png`;
+            imgWeatherIcon.src = `http://openweathermap.org/img/wn/${currentWeatherIcon}@2x.png`;
             imgWeatherIcon.className = 'h-20 w-20';
             showTodayWeatherIcon.appendChild(imgWeatherIcon);
 
@@ -775,7 +775,7 @@
 
 
             //Using in Activiity condtion
-            let todayWeather = weatherNameList[0];
+            let todayWeather = currentWeatherName;
             let todayTemperature = temperaturesList[0];
             let todayRainChance = todayRainList[0];
             let activityContext = getActivityContext(
