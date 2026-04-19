@@ -225,26 +225,34 @@ async function fetchBerlinDeEvents() {
     results.push(...items);
   }
 
-  const enriched = await Promise.all(
-    results.map(async (event) => {
-      try {
-        const details = await fetchBerlinDeEventDetails(event.url);
-        return {
-          ...event,
-          venue: details.venue || event.venue,
-          address: details.address || '',
-          coordinates: details.coordinates || null
-        };
-      } catch (error) {
-        console.error('Berlin.de detail fetch error:', error);
-        return {
-          ...event,
-          address: '',
-          coordinates: null
-        };
-      }
-    })
-  );
+  const enriched = [];
+  const detailBatchSize = 3;
+
+  for (let index = 0; index < results.length; index += detailBatchSize) {
+    const batch = results.slice(index, index + detailBatchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (event) => {
+        try {
+          const details = await fetchBerlinDeEventDetails(event.url);
+          return {
+            ...event,
+            venue: details.venue || event.venue,
+            address: details.address || '',
+            coordinates: details.coordinates || null
+          };
+        } catch (error) {
+          console.error('Berlin.de detail fetch error:', error);
+          return {
+            ...event,
+            address: '',
+            coordinates: null
+          };
+        }
+      })
+    );
+
+    enriched.push(...batchResults);
+  }
 
   return enriched;
 }
