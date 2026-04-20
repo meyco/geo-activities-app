@@ -12,6 +12,7 @@ const SCRAPER_USER_AGENT = 'geo-activities-app/1.0 (+local dev)';
 const berlinEventDetailsCache = new Map();
 const addressCoordinatesCache = new Map();
 const apiResponseCache = new Map();
+const rateLimitStore = new Map();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const CACHE_TTL_MS = {
@@ -20,6 +21,9 @@ const CACHE_TTL_MS = {
   weather: 1000 * 60 * 10,
   places: 1000 * 60 * 30
 };
+const RATE_LIMIT_WINDOW_MS = 1000 * 60;
+const RATE_LIMIT_MAX_REQUESTS = 30;
+const MAX_LOCATION_QUERY_LENGTH = 120;
 
 const BERLIN_DE_SOURCES = [
   {
@@ -69,6 +73,71 @@ function setCachedValue(cacheKey, value, ttlMs) {
     value,
     expiresAt: Date.now() + ttlMs
   });
+}
+
+function cleanupRateLimitStore(now) {
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetAt) {
+      rateLimitStore.delete(key);
+    }
+  }
+}
+
+function getClientIp(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function applyRateLimit(req, res, keyPrefix) {
+  const now = Date.now();
+  cleanupRateLimitStore(now);
+
+  const clientIp = getClientIp(req);
+  const key = `${keyPrefix}:${clientIp}`;
+  const existingEntry = rateLimitStore.get(key);
+
+  if (!existingEntry || now > existingEntry.resetAt) {
+    rateLimitStore.set(key, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS
+    });
+    return true;
+  }
+
+  if (existingEntry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterSeconds = Math.ceil((existingEntry.resetAt - now) / 1000);
+    res.set('Retry-After', String(retryAfterSeconds));
+    res.status(429).json({
+      error: 'Too many requests',
+      details: 'Please wait a minute and try again.'
+    });
+    return false;
+  }
+
+  existingEntry.count += 1;
+  return true;
+}
+
+function normalizeLocationInput(value) {
+  return normalizeText(value?.toString() || '').slice(0, MAX_LOCATION_QUERY_LENGTH);
+}
+
+function parseCoordinate(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isValidLatitude(value) {
+  return value !== null && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value) {
+  return value !== null && value >= -180 && value <= 180;
 }
 
 async function fetchHtml(url) {
@@ -323,11 +392,15 @@ async function fetchLumaEvents(city) {
 
 app.get('/api/geocode', async (req, res) => {
   const apiKey = process.env.OPENCAGE_API_KEY;
-  const city = req.query.city?.toString().trim();
-  const country = req.query.country?.toString().trim();
+  const city = normalizeLocationInput(req.query.city);
+  const country = normalizeLocationInput(req.query.country);
 
   if (!apiKey) {
     return res.status(500).json({ error: 'Missing OpenCage API key' });
+  }
+
+  if (!applyRateLimit(req, res, 'geocode')) {
+    return;
   }
 
   if (!city || !country) {
@@ -441,23 +514,27 @@ app.get('/api/maps-config', (req, res) => {
 
 app.get('/api/weather', async (req, res) => {
   const apiKey = process.env.OPENWEATHER_API_KEY;
-  const lat = req.query.lat?.toString();
-  const lon = req.query.lon?.toString();
+  const lat = parseCoordinate(req.query.lat);
+  const lon = parseCoordinate(req.query.lon);
 
   if (!apiKey) {
     return res.status(500).json({ error: 'Missing OpenWeather API key' });
   }
 
-  if (!lat || !lon) {
-    return res.status(400).json({ error: 'Latitude and longitude are required' });
+  if (!applyRateLimit(req, res, 'weather')) {
+    return;
+  }
+
+  if (!isValidLatitude(lat) || !isValidLongitude(lon)) {
+    return res.status(400).json({ error: 'Valid latitude and longitude are required' });
   }
 
   const url = new URL('https://api.openweathermap.org/data/2.5/forecast');
-  url.searchParams.set('lat', lat);
-  url.searchParams.set('lon', lon);
+  url.searchParams.set('lat', lat.toString());
+  url.searchParams.set('lon', lon.toString());
   url.searchParams.set('appid', apiKey);
   url.searchParams.set('units', 'metric');
-  const cacheKey = `weather:${Number(lat).toFixed(3)}:${Number(lon).toFixed(3)}`;
+  const cacheKey = `weather:${lat.toFixed(3)}:${lon.toFixed(3)}`;
 
   try {
     const cachedResponse = getCachedValue(cacheKey);
@@ -485,8 +562,21 @@ app.get('/api/weather', async (req, res) => {
 
 app.get('/api/search', async (req, res) => {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  const latitude = Number(req.query.lat);
-  const longitude = Number(req.query.lon);
+  const latitude = parseCoordinate(req.query.lat);
+  const longitude = parseCoordinate(req.query.lon);
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Missing Google Maps API key' });
+  }
+
+  if (!applyRateLimit(req, res, 'places')) {
+    return;
+  }
+
+  if (!isValidLatitude(latitude) || !isValidLongitude(longitude)) {
+    return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+  }
+
   const cacheKey = `places:${latitude.toFixed(3)}:${longitude.toFixed(3)}`;
 
   try {
