@@ -292,6 +292,12 @@
                         </div>
                     </div>
                     <div id="mapStatus" class="mb-3 text-sm leading-6 text-slate-600"></div>
+                    <div class="mb-3 flex items-center gap-3">
+                        <button id="mapSearchAreaButton" class="hidden rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60" type="button">
+                            Search this area
+                        </button>
+                        <p id="mapSearchHint" class="hidden text-sm leading-6 text-slate-500">Move the map, then search only when you want a fresh set of nearby attractions.</p>
+                    </div>
                     <div id="eventMap" class="overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white" style="min-height: 360px;"></div>
                 </section>
 
@@ -330,9 +336,22 @@
         let googleMapsPromise;
         let plotResizeFrame;
         let isSearching = false;
+        let isAreaSearchLoading = false;
         let lastSearchKey = '';
         let lastSearchAt = 0;
+        let eventMap;
+        let eventMapInfoWindow;
+        let eventMapMarkers = [];
+        let currentEvents = [];
+        let currentAttractions = [];
+        let currentCityCoordinates = null;
+        let mapIdleDebounceTimer;
+        let mapWasDragged = false;
+        let mapZoomChanged = false;
+        let isProgrammaticMapMove = false;
+        let lastAttractionSearchSignature = '';
         const SEARCH_DEDUP_WINDOW_MS = 15000;
+        const MAP_SEARCH_IDLE_MS = 400;
 
         function resizeForecastPlots() {
             const todayPlot = document.getElementById('TodayTemperature');
@@ -498,11 +517,136 @@
             return googleMapsPromise;
         }
 
-        async function renderEventMap(events, attractions, cityCoordinates) {
+        function getMapSearchAreaButton() {
+            return document.getElementById('mapSearchAreaButton');
+        }
+
+        function getMapSearchHint() {
+            return document.getElementById('mapSearchHint');
+        }
+
+        function setAreaSearchButtonState({ visible = false, loading = false } = {}) {
+            const button = getMapSearchAreaButton();
+            const hint = getMapSearchHint();
+
+            if (!button || !hint) {
+                return;
+            }
+
+            button.classList.toggle('hidden', !visible);
+            hint.classList.toggle('hidden', !visible);
+            button.disabled = loading;
+            button.textContent = loading ? 'Searching...' : 'Search this area';
+        }
+
+        function getAttractionSearchSignatureFromCenter(center, zoom) {
+            return `${center.lat().toFixed(3)}:${center.lng().toFixed(3)}:${zoom}`;
+        }
+
+        function getCurrentMapSearchSignature() {
+            if (!eventMap) {
+                return '';
+            }
+
+            const center = eventMap.getCenter();
+
+            if (!center) {
+                return '';
+            }
+
+            return getAttractionSearchSignatureFromCenter(center, eventMap.getZoom());
+        }
+
+        function clearEventMapMarkers() {
+            eventMapMarkers.forEach((marker) => marker.setMap(null));
+            eventMapMarkers = [];
+        }
+
+        function updateAttractionsList(nearbyPlaces) {
+            const nearbyAttractionsContainer = document.getElementById('result');
+            nearbyAttractionsContainer.innerHTML = '';
+
+            for (let i = 0; i < nearbyPlaces.length; i++) {
+                const placeName = nearbyPlaces[i].name;
+                const address = nearbyPlaces[i].vicinity;
+                const placeQuery = encodeURIComponent(`${placeName} ${address}`.trim());
+                const mapsUrl = placeQuery
+                    ? `https://www.google.com/maps/search/?api=1&query=${placeQuery}`
+                    : '#';
+                const placeElement = document.createElement('div');
+                placeElement.className = 'rounded-[1.35rem] border border-slate-200/70 bg-white/90 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg';
+                placeElement.innerHTML = `<h4 class="font-display text-xl font-bold text-ink">${placeName}</h4><p class="mt-3 text-sm leading-6 text-slate-600">${address}</p><a class="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-ink transition hover:border-accent hover:text-accent" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>`;
+
+                nearbyAttractionsContainer.appendChild(placeElement);
+            }
+        }
+
+        async function fetchAttractions(latitude, longitude) {
+            const response = await fetch(`/api/search?lat=${latitude}&lon=${longitude}`);
+            const placesData = await response.json();
+            console.log("Nearby places", placesData);
+
+            if (!response.ok) {
+                throw new Error(placesData.details || placesData.error || 'Failed to fetch nearby attractions.');
+            }
+
+            const nearbyPlaces = Array.isArray(placesData.results) ? placesData.results : [];
+
+            console.log("placeNameList", nearbyPlaces.map((place) => place.name));
+            console.log("addressList", nearbyPlaces.map((place) => place.vicinity));
+
+            return nearbyPlaces;
+        }
+
+        function armMapInteractionListeners(maps) {
+            if (!eventMap) {
+                return;
+            }
+
+            maps.event.clearListeners(eventMap, 'dragstart');
+            maps.event.clearListeners(eventMap, 'zoom_changed');
+            maps.event.clearListeners(eventMap, 'idle');
+
+            eventMap.addListener('dragstart', () => {
+                mapWasDragged = true;
+            });
+
+            eventMap.addListener('zoom_changed', () => {
+                mapZoomChanged = true;
+            });
+
+            eventMap.addListener('idle', () => {
+                if (isProgrammaticMapMove) {
+                    isProgrammaticMapMove = false;
+                    lastAttractionSearchSignature = getCurrentMapSearchSignature() || lastAttractionSearchSignature;
+                    setAreaSearchButtonState({ visible: false });
+                    return;
+                }
+
+                if (!mapWasDragged && !mapZoomChanged) {
+                    return;
+                }
+
+                window.clearTimeout(mapIdleDebounceTimer);
+                mapIdleDebounceTimer = window.setTimeout(() => {
+                    const nextSignature = getCurrentMapSearchSignature();
+
+                    if (!nextSignature || nextSignature === lastAttractionSearchSignature) {
+                        setAreaSearchButtonState({ visible: false });
+                    } else {
+                        setAreaSearchButtonState({ visible: true });
+                    }
+                }, MAP_SEARCH_IDLE_MS);
+
+                mapWasDragged = false;
+                mapZoomChanged = false;
+            });
+        }
+
+        async function renderEventMap(events, attractions, cityCoordinates, options = {}) {
             const mapStatus = document.getElementById('mapStatus');
             const mapElement = document.getElementById('eventMap');
-            mapStatus.textContent = '';
-            mapElement.innerHTML = '';
+            const preserveViewport = options.preserveViewport === true;
 
             const mappableEvents = events.filter(event => event.coordinates?.lat && event.coordinates?.lng);
             const mappableAttractions = attractions.filter(place => place.coordinates?.lat && place.coordinates?.lng);
@@ -516,22 +660,30 @@
             try {
                 const maps = await loadGoogleMaps(mapsConfig.browserApiKey);
                 const center = cityCoordinates || mappableEvents[0]?.coordinates || mappableAttractions[0]?.coordinates || mapsConfig.defaultCenter;
-                const map = new maps.Map(mapElement, {
-                    center,
-                    zoom: (mappableEvents.length > 0 || mappableAttractions.length > 0) ? 11 : 12,
-                    mapTypeControl: false,
-                    streetViewControl: false
-                });
-                const infoWindow = new maps.InfoWindow();
+
+                if (!eventMap) {
+                    eventMap = new maps.Map(mapElement, {
+                        center,
+                        zoom: (mappableEvents.length > 0 || mappableAttractions.length > 0) ? 11 : 12,
+                        mapTypeControl: false,
+                        streetViewControl: false
+                    });
+                    eventMapInfoWindow = new maps.InfoWindow();
+                    armMapInteractionListeners(maps);
+                }
+
+                const map = eventMap;
+                const infoWindow = eventMapInfoWindow;
                 const bounds = new maps.LatLngBounds();
+                clearEventMapMarkers();
 
                 if (cityCoordinates) {
                     bounds.extend(cityCoordinates);
-                    new maps.Marker({
+                    eventMapMarkers.push(new maps.Marker({
                         position: cityCoordinates,
                         map,
                         title: 'Selected city'
-                    });
+                    }));
                 }
 
                 mappableEvents.forEach((event) => {
@@ -561,6 +713,7 @@
                         `);
                         infoWindow.open(map, marker);
                     });
+                    eventMapMarkers.push(marker);
                 });
 
                 mappableAttractions.forEach((place) => {
@@ -589,18 +742,36 @@
                         `);
                         infoWindow.open(map, marker);
                     });
+                    eventMapMarkers.push(marker);
                 });
 
                 if (mappableEvents.length === 0 && mappableAttractions.length === 0) {
                     mapStatus.textContent = 'No mapped places yet. Showing the selected city on the map.';
-                    map.setCenter(center);
-                    map.setZoom(12);
+                    if (!preserveViewport) {
+                        isProgrammaticMapMove = true;
+                        map.setCenter(center);
+                        map.setZoom(12);
+                    }
                 } else if (mappableEvents.length === 1 && mappableAttractions.length === 0) {
-                    map.setCenter(mappableEvents[0].coordinates);
-                    map.setZoom(13);
+                    mapStatus.textContent = `${mappableEvents.length} event pin and ${mappableAttractions.length} attraction pins shown on the map.`;
+                    if (!preserveViewport) {
+                        isProgrammaticMapMove = true;
+                        map.setCenter(mappableEvents[0].coordinates);
+                        map.setZoom(13);
+                    }
                 } else {
-                    map.fitBounds(bounds, 40);
                     mapStatus.textContent = `${mappableEvents.length} event pin${mappableEvents.length !== 1 ? 's' : ''} and ${mappableAttractions.length} attraction pin${mappableAttractions.length !== 1 ? 's' : ''} shown on the map.`;
+                    if (!preserveViewport && !bounds.isEmpty()) {
+                        isProgrammaticMapMove = true;
+                        map.fitBounds(bounds, 40);
+                    }
+                }
+
+                if (!preserveViewport) {
+                    window.setTimeout(() => {
+                        lastAttractionSearchSignature = getCurrentMapSearchSignature() || lastAttractionSearchSignature;
+                        setAreaSearchButtonState({ visible: false });
+                    }, 0);
                 }
             } catch (error) {
                 console.error('Google Maps error', error);
@@ -617,6 +788,36 @@
 
             searchButton.disabled = isLoading;
             searchButton.textContent = isLoading ? 'Loading...' : 'Explore Now';
+        }
+
+        async function searchCurrentMapArea() {
+            if (!eventMap || isAreaSearchLoading) {
+                return;
+            }
+
+            const center = eventMap.getCenter();
+
+            if (!center) {
+                return;
+            }
+
+            isAreaSearchLoading = true;
+            setAreaSearchButtonState({ visible: true, loading: true });
+
+            try {
+                const nearbyPlaces = await fetchAttractions(center.lat(), center.lng());
+                currentAttractions = nearbyPlaces;
+                updateAttractionsList(nearbyPlaces);
+                await renderEventMap(currentEvents, nearbyPlaces, currentCityCoordinates, { preserveViewport: true });
+                lastAttractionSearchSignature = getCurrentMapSearchSignature();
+                setAreaSearchButtonState({ visible: false });
+            } catch (error) {
+                console.error('Area search error', error);
+                alert(error.message || 'Failed to refresh nearby attractions for this area.');
+                setAreaSearchButtonState({ visible: true });
+            } finally {
+                isAreaSearchLoading = false;
+            }
         }
 
         function setPanelsLoadingState(isLoading) {
@@ -726,51 +927,12 @@
                 }
             }
 
-            const response = await fetch(`/api/search?lat=${latitude}&lon=${longitude}`);
-            const placesData = await response.json();
-            console.log("Nearby places", placesData);
-
-            let nearbyPlaces = placesData.results;
-            if (!nearbyPlaces || !Array.isArray(nearbyPlaces)) {
-                console.warn("No results from Places API", placesData);
-                return;
-            }
-
-
-
-            let placeNameList = [];
-            let addressList = [];
-            let placeCoordinatesList = [];
-            for (let i = 0; i < nearbyPlaces.length; i++) {
-                let placeName = nearbyPlaces[i].name;
-                let address = nearbyPlaces[i].vicinity;
-                let coordinates = nearbyPlaces[i].coordinates;
-
-                placeNameList.push(placeName);
-                addressList.push(address);
-                placeCoordinatesList.push(coordinates);
-            }
-            console.log("placeNameList", placeNameList);
-            console.log("addressList", addressList);
-
-            let nearbyAttractionsContainer = document.getElementById('result');
-            nearbyAttractionsContainer.innerHTML = '';
-            for (let i = 0; i < placeNameList.length; i++) {
-                let placeName = placeNameList[i];
-                let address = addressList[i];
-                let coordinates = placeCoordinatesList[i];
-                let placeQuery = encodeURIComponent(`${placeName} ${address}`.trim());
-                let mapsUrl = placeQuery
-                    ? `https://www.google.com/maps/search/?api=1&query=${placeQuery}`
-                    : '#';
-                let placeElement = document.createElement('div');
-                placeElement.className = 'rounded-[1.35rem] border border-slate-200/70 bg-white/90 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg';
-                placeElement.innerHTML = `<h4 class="font-display text-xl font-bold text-ink">${placeName}</h4><p class="mt-3 text-sm leading-6 text-slate-600">${address}</p><a class="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-ink transition hover:border-accent hover:text-accent" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>`;
-
-                nearbyAttractionsContainer.appendChild(placeElement);
-            }
-
-            await renderEventMap(events, nearbyPlaces, { lat: latitude, lng: longitude });
+            const nearbyPlaces = await fetchAttractions(latitude, longitude);
+            updateAttractionsList(nearbyPlaces);
+            currentEvents = events;
+            currentAttractions = nearbyPlaces;
+            currentCityCoordinates = { lat: latitude, lng: longitude };
+            await renderEventMap(events, nearbyPlaces, currentCityCoordinates);
 
 
 
@@ -1080,10 +1242,15 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const searchForm = document.getElementById('searchForm');
+            const mapSearchAreaButton = getMapSearchAreaButton();
 
             searchForm.addEventListener('submit', (event) => {
                 event.preventDefault();
                 main();
+            });
+
+            mapSearchAreaButton?.addEventListener('click', () => {
+                searchCurrentMapArea();
             });
 
             main();
