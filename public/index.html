@@ -844,12 +844,12 @@
                 return;
             }
 
-            let inputCity = document.getElementById("inputCity");
-            let getInputCity = inputCity.value.trim();
+            const inputCity = document.getElementById("inputCity");
+            const getInputCity = inputCity.value.trim();
 
-            let inputCountry = document.getElementById("inputCountry");
-            let getInputCountry = inputCountry.value.trim();
-            let searchKey = `${getInputCity.toLowerCase()}::${getInputCountry.toLowerCase()}`;
+            const inputCountry = document.getElementById("inputCountry");
+            const getInputCountry = inputCountry.value.trim();
+            const searchKey = `${getInputCity.toLowerCase()}::${getInputCountry.toLowerCase()}`;
 
             if (!getInputCity || !getInputCountry) {
                 alert('Please enter both a city and country.');
@@ -868,13 +868,13 @@
 
             try {
 
-            let showCityName = document.getElementById("cityName");
-            let heroCityName = document.getElementById("heroCityName");
+            const showCityName = document.getElementById("cityName");
+            const heroCityName = document.getElementById("heroCityName");
             showCityName.textContent = getInputCity;
             heroCityName.textContent = getInputCity;
 
-            let geocodeResponse = await fetch(`/api/geocode?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
-            let geocodeData = await geocodeResponse.json();
+            const geocodeResponse = await fetch(`/api/geocode?city=${encodeURIComponent(getInputCity)}&country=${encodeURIComponent(getInputCountry)}`);
+            const geocodeData = await geocodeResponse.json();
 
             if (!geocodeResponse.ok) {
                 console.error("OpenCage error", geocodeData);
@@ -882,10 +882,10 @@
                 return;
             }
 
-            let latitude = geocodeData.geometry.lat;
-            let longitude = geocodeData.geometry.lng;
+            const latitude = geocodeData.geometry.lat;
+            const longitude = geocodeData.geometry.lng;
 
-            let cityName = geocodeData.formatted;
+            const cityName = geocodeData.formatted;
             console.log("cityname", cityName);
             console.log("latitude", latitude, "longitude", longitude);
 
@@ -893,34 +893,34 @@
             const eventData = await eventRes.json();
             const events = Array.isArray(eventData.results) ? eventData.results : [];
 
-            let eventsContainer = document.getElementById('events');
+            const eventsContainer = document.getElementById('events');
             eventsContainer.innerHTML = '';
 
             if (!eventRes.ok) {
-                let errorElement = document.createElement('p');
+                const errorElement = document.createElement('p');
                 errorElement.className = 'text-base';
                 errorElement.textContent = eventData.error || 'Failed to load events.';
                 eventsContainer.appendChild(errorElement);
             } else if (eventData.warning) {
-                let warningElement = document.createElement('p');
+                const warningElement = document.createElement('p');
                 warningElement.className = 'text-base';
                 warningElement.textContent = eventData.warning;
                 eventsContainer.appendChild(warningElement);
             } else if (events.length === 0) {
-                let emptyElement = document.createElement('p');
+                const emptyElement = document.createElement('p');
                 emptyElement.className = 'text-base';
                 emptyElement.textContent = 'No nearby events found.';
                 eventsContainer.appendChild(emptyElement);
             } else {
                 for (let i = 0; i < Math.min(events.length, 6); i++) {
-                    let event = events[i];
-                    let eventName = event.name || 'Untitled event';
-                    let eventDate = event.dateText || 'Date unavailable';
-                    let eventVenue = event.venue || 'Venue unavailable';
-                    let eventAddress = event.address || '';
-                    let eventSource = event.source || 'Event source';
-                    let eventUrl = event.url || '#';
-                    let eventElement = document.createElement('div');
+                    const event = events[i];
+                    const eventName = event.name || 'Untitled event';
+                    const eventDate = event.dateText || 'Date unavailable';
+                    const eventVenue = event.venue || 'Venue unavailable';
+                    const eventAddress = event.address || '';
+                    const eventSource = event.source || 'Event source';
+                    const eventUrl = event.url || '#';
+                    const eventElement = document.createElement('div');
                     eventElement.className = 'rounded-[1.35rem] border border-slate-200/70 bg-white/90 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg';
                     eventElement.innerHTML = `<h4 class="font-display text-xl font-bold text-ink">${eventName}</h4><p class="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-accent">${eventSource}</p><p class="mt-4 text-sm font-semibold text-slate-800">${eventDate}</p><p class="mt-2 text-sm text-slate-700">${eventVenue}</p><p class="mt-1 text-sm text-slate-500">${eventAddress}</p><a class="mt-4 inline-flex w-fit items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800" href="${eventUrl}" target="_blank" rel="noopener noreferrer">View event <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>`;
                     eventsContainer.appendChild(eventElement);
@@ -938,8 +938,8 @@
 
 
             //weather forcast
-            let weatherResponse = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`);
-            let data = await weatherResponse.json();
+            const weatherResponse = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`);
+            const data = await weatherResponse.json();
 
             if (!weatherResponse.ok) {
                 console.error("OpenWeather error", data);
@@ -950,17 +950,17 @@
             console.log("openWeatherMap", data);
 
 
-            let list = data.list;
-            let dailyForecastSummary = buildDailyForecastSummary(list);
-            let temperaturesList = [];//make Array.
-            let timesList = [];//make Array
-            let humidList = [];//make Array
-            let rainList = [];
-            let todayTemperaturesList = [];
-            let todayRainList = [];
-            let todayTimeList = [];
-            let currentWeatherName = list[0]?.weather?.[0]?.description || '';
-            let currentWeatherIcon = list[0]?.weather?.[0]?.icon || '';
+            const list = data.list;
+            const dailyForecastSummary = buildDailyForecastSummary(list);
+            const temperaturesList = [];//make Array.
+            const timesList = [];//make Array
+            const humidList = [];//make Array
+            const rainList = [];
+            const todayTemperaturesList = [];
+            const todayRainList = [];
+            const todayTimeList = [];
+            const currentWeatherName = list[0]?.weather?.[0]?.description || '';
+            const currentWeatherIcon = list[0]?.weather?.[0]?.icon || '';
             //console.log("dataLists",list);// Check get API data
 
             dailyForecastSummary.forEach((day) => {
@@ -971,9 +971,9 @@
             });
 
             for (let i = 0; i < 8; i++) {
-                let temperature = list[i].main.temp;//get tempertures Array.They alerady Arra
-                let rain = list[i].pop * 100;//get weather Name Array
-                let time = list[i].dt_txt;//get time Array
+                const temperature = list[i].main.temp;//get tempertures Array.They alerady Arra
+                const rain = list[i].pop * 100;//get weather Name Array
+                const time = list[i].dt_txt;//get time Array
 
                 todayTemperaturesList.push(temperature); // push is add to number to temperaturesList Array.
                 todayRainList.push(rain); // add to number to  Array.
@@ -991,13 +991,13 @@
             // console.log("weatherIconList",weatherIconList);// Check get API data
 
 
-            let showTodayWeather = document.getElementById('todayWeather');
+            const showTodayWeather = document.getElementById('todayWeather');
             showTodayWeather.textContent = currentWeatherName;
 
             //Show Today Weather Icon in Div
-            let showTodayWeatherIcon = document.getElementById('todayWeatherIcon');
+            const showTodayWeatherIcon = document.getElementById('todayWeatherIcon');
             showTodayWeatherIcon.innerHTML = '';
-            let imgWeatherIcon = document.createElement('img');
+            const imgWeatherIcon = document.createElement('img');
             imgWeatherIcon.src = `https://openweathermap.org/img/wn/${currentWeatherIcon}@2x.png`;
             imgWeatherIcon.className = 'h-20 w-20';
             showTodayWeatherIcon.appendChild(imgWeatherIcon);
@@ -1005,33 +1005,33 @@
 
 
 
-            let showTodayTemperature = document.getElementById('todayTemperature');
+            const showTodayTemperature = document.getElementById('todayTemperature');
             showTodayTemperature.textContent = `${temperaturesList[0].toFixed(1)}°C`;
-            let showTodayRainChance = document.getElementById('todayRainChance');
-            let showTodayRainChanceText = showTodayRainChance.querySelector('span');
-            let maxTodayRainChance = todayRainList.length ? Math.max(...todayRainList) : 0;
+            const showTodayRainChance = document.getElementById('todayRainChance');
+            const showTodayRainChanceText = showTodayRainChance.querySelector('span');
+            const maxTodayRainChance = todayRainList.length ? Math.max(...todayRainList) : 0;
             showTodayRainChanceText.textContent = `Today's max rain chance: ${Math.round(maxTodayRainChance)}%`;
 
-            let showActivities = document.getElementById('todayActivities');
-            let showActivitiesimg = document.getElementById('imgActivities');
-            let todayActivitiesText = document.getElementById('todayActivitiesText');
-            let activityReason = document.getElementById('activityReason');
-            let activityBestTime = document.getElementById('activityBestTime');
-            let activityBring = document.getElementById('activityBring');
+            const showActivities = document.getElementById('todayActivities');
+            const showActivitiesimg = document.getElementById('imgActivities');
+            const todayActivitiesText = document.getElementById('todayActivitiesText');
+            const activityReason = document.getElementById('activityReason');
+            const activityBestTime = document.getElementById('activityBestTime');
+            const activityBring = document.getElementById('activityBring');
 
             // Delete current image
             showActivitiesimg.innerHTML = '';
 
-            let img = document.createElement('img');
+            const img = document.createElement('img');
             img.width = 100;
             img.height = 100;
 
 
             //Using in Activiity condtion
-            let todayWeather = currentWeatherName;
-            let todayTemperature = temperaturesList[0];
-            let todayRainChance = todayRainList[0];
-            let activityContext = getActivityContext(
+            const todayWeather = currentWeatherName;
+            const todayTemperature = temperaturesList[0];
+            const todayRainChance = todayRainList[0];
+            const activityContext = getActivityContext(
                 todayTemperature,
                 todayWeather,
                 todayRainChance,
@@ -1101,7 +1101,7 @@
                 });
             });
 
-            let dataSet1 = {
+            const dataSet1 = {
                 x: fiveDayLabels,
                 y: temperaturesList,
                 type: 'scatter',
@@ -1121,7 +1121,7 @@
                 hovertemplate: 'Temperature: %{y:.1f}°C<extra></extra>'
             };
 
-            let dataSet2 = {
+            const dataSet2 = {
                 x: fiveDayLabels,
                 y: humidList,
                 type: 'bar',
@@ -1134,7 +1134,7 @@
             };
 
 
-            let dataSet3 = {
+            const dataSet3 = {
                 x: fiveDayLabels,
                 y: rainList,
                 type: 'bar',
@@ -1146,7 +1146,7 @@
                 hovertemplate: 'Rain chance: %{y:.0f}%<extra></extra>'
             };
 
-            let dataSet4 = {
+            const dataSet4 = {
                 x: todayLabels,
                 y: todayTemperaturesList,
                 type: 'scatter',
@@ -1166,7 +1166,7 @@
                 hovertemplate: 'Temperature: %{y:.1f}°C<extra></extra>'
             };
 
-            let dataSet5 = {
+            const dataSet5 = {
                 x: todayLabels,
                 y: todayRainList,
                 type: 'bar',
