@@ -332,7 +332,101 @@
         </section>
     </main>
 
+    <aside id="cookieConsent" class="fixed inset-x-4 bottom-4 z-[100] hidden max-w-2xl rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-2xl md:left-auto md:right-6 md:p-6" role="dialog" aria-modal="true" aria-labelledby="cookieConsentTitle" aria-describedby="cookieConsentDescription">
+        <h2 id="cookieConsentTitle" class="font-display text-lg font-bold text-ink">Analytics cookies</h2>
+        <p id="cookieConsentDescription" class="mt-2 text-sm leading-6 text-slate-600">
+            We use optional Google Analytics cookies to understand how visitors find and use this site. Analytics stays off unless you accept. You can change your choice at any time.
+        </p>
+        <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button id="rejectAnalytics" class="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" type="button">Reject</button>
+            <button id="acceptAnalytics" class="rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800" type="button">Accept analytics</button>
+        </div>
+    </aside>
+
+    <button id="cookieSettings" class="fixed bottom-4 left-4 z-[90] hidden rounded-full border border-slate-300 bg-white/95 px-4 py-2 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur transition hover:bg-white" type="button" aria-controls="cookieConsent">
+        Cookie settings
+    </button>
+
     <script>
+        const GA_MEASUREMENT_ID = 'G-DMCM5N6ZKD';
+        const ANALYTICS_CONSENT_KEY = 'geo-activities-analytics-consent';
+        let analyticsLoaded = false;
+
+        function loadGoogleAnalytics() {
+            if (analyticsLoaded) {
+                return;
+            }
+
+            analyticsLoaded = true;
+            window[`ga-disable-${GA_MEASUREMENT_ID}`] = false;
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = function () {
+                window.dataLayer.push(arguments);
+            };
+
+            window.gtag('js', new Date());
+            window.gtag('config', GA_MEASUREMENT_ID, {
+                allow_google_signals: false,
+                allow_ad_personalization_signals: false
+            });
+
+            const analyticsScript = document.createElement('script');
+            analyticsScript.async = true;
+            analyticsScript.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
+            document.head.appendChild(analyticsScript);
+        }
+
+        function setAnalyticsConsent(choice) {
+            localStorage.setItem(ANALYTICS_CONSENT_KEY, choice);
+            document.getElementById('cookieConsent').classList.add('hidden');
+            document.getElementById('cookieSettings').classList.remove('hidden');
+
+            if (choice === 'accepted') {
+                loadGoogleAnalytics();
+            } else {
+                window[`ga-disable-${GA_MEASUREMENT_ID}`] = true;
+
+                if (window.gtag) {
+                    window.gtag('consent', 'update', {
+                        analytics_storage: 'denied',
+                        ad_storage: 'denied',
+                        ad_user_data: 'denied',
+                        ad_personalization: 'denied'
+                    });
+                }
+
+                document.cookie.split(';').forEach((cookie) => {
+                    const cookieName = cookie.split('=')[0].trim();
+                    if (cookieName === '_ga' || cookieName.startsWith('_ga_')) {
+                        document.cookie = `${cookieName}=; Max-Age=0; path=/; SameSite=Lax`;
+                    }
+                });
+            }
+        }
+
+        function initializeAnalyticsConsent() {
+            const consentBanner = document.getElementById('cookieConsent');
+            const cookieSettings = document.getElementById('cookieSettings');
+            const savedChoice = localStorage.getItem(ANALYTICS_CONSENT_KEY);
+
+            document.getElementById('acceptAnalytics').addEventListener('click', () => setAnalyticsConsent('accepted'));
+            document.getElementById('rejectAnalytics').addEventListener('click', () => setAnalyticsConsent('rejected'));
+            cookieSettings.addEventListener('click', () => {
+                consentBanner.classList.remove('hidden');
+                cookieSettings.classList.add('hidden');
+                document.getElementById('acceptAnalytics').focus();
+            });
+
+            if (savedChoice === 'accepted') {
+                cookieSettings.classList.remove('hidden');
+                loadGoogleAnalytics();
+            } else if (savedChoice === 'rejected') {
+                cookieSettings.classList.remove('hidden');
+            } else {
+                consentBanner.classList.remove('hidden');
+            }
+        }
+
         let googleMapsPromise;
         let plotResizeFrame;
         let isSearching = false;
@@ -1241,6 +1335,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            initializeAnalyticsConsent();
             const searchForm = document.getElementById('searchForm');
             const mapSearchAreaButton = getMapSearchAreaButton();
 
